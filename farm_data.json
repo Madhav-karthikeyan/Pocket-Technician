@@ -1,0 +1,1254 @@
+{
+    "farms": {
+        "Demo Farm": {
+            "ponds": {
+                "Pond-1": {
+                    "area": 10000,
+                    "initial_stock": 300000,
+                    "stocking_date": "2025-01-01",
+                    "feed_log": [
+                        {
+                            "date": "2025-02-01",
+                            "feed": 100
+                        },
+                        {
+                            "date": "2025-02-08",
+                            "feed": 120
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "date": "2025-02-01",
+                            "abw": 5,
+                            "present_survival": 250000,
+                            "survival_pct": 83.33,
+                            "biomass": 1250.0,
+                            "feed_pct": 4.5
+                        },
+                        {
+                            "date": "2025-02-08",
+                            "abw": 7,
+                            "present_survival": 230000,
+                            "survival_pct": 76.67,
+                            "biomass": 1610.0,
+                            "feed_pct": 3.8,
+                            "days_gap": 7,
+                            "weekly_growth": 2.0,
+                            "avg_daily_growth": 0.286,
+                            "weekly_biomass": 360.0,
+                            "weekly_fcr": 1.22
+                        }
+                    ],
+                    "water_log": [
+                        {
+                            "date": "2025-02-01",
+                            "temp": 30,
+                            "do": 5.1,
+                            "ammonia": 0.3,
+                            "nitrite": 0.4,
+                            "ph": 7.8
+                        },
+                        {
+                            "date": "2025-02-08",
+                            "temp": 31,
+                            "do": 4.4,
+                            "ammonia": 0.6,
+                            "nitrite": 0.5,
+                            "ph": 7.6
+                        }
+                    ]
+                }
+            }
+        },
+        "Trail": {
+            "ponds": {
+                "1": {
+                    "area": 4000,
+                    "initial_stock": 100000,
+                    "stocking_date": "2026-01-08",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 22.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 20.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "date": "2026-03-18",
+                            "abw": 30,
+                            "present_survival": 52941,
+                            "survival_pct": 52.94,
+                            "biomass": 1588.2,
+                            "feed_pct": 1.5
+                        },
+                        {
+                            "sampling_date": "2026-02-11",
+                            "culture_day": 35,
+                            "abw": 2,
+                            "present_survival": 225000,
+                            "survival_pct": 225.0,
+                            "biomass": 450.0,
+                            "feed_pct": 6.5,
+                            "days_since_last_sampling": 35,
+                            "weekly_growth": -5.6,
+                            "avg_daily_growth": -0.8,
+                            "biomass_gain": -1138.2,
+                            "weekly_biomass_gain": -227.6,
+                            "weekly_fcr": null,
+                            "DOC": 35
+                        },
+                        {
+                            "sampling_date": "2026-02-11",
+                            "culture_day": 35,
+                            "abw": 30,
+                            "present_survival": 52941,
+                            "survival_pct": 52.94,
+                            "biomass": 1588.2,
+                            "feed_pct": 1.5,
+                            "DOC": 35
+                        },
+                        {
+                            "sampling_date": "2026-02-11",
+                            "culture_day": 35,
+                            "abw": 2,
+                            "present_survival": 225000,
+                            "survival_pct": 225.0,
+                            "biomass": 450.0,
+                            "feed_pct": 6.5,
+                            "DOC": 35
+                        },
+                        {
+                            "sampling_date": "2026-03-11",
+                            "culture_day": 62,
+                            "abw": 2,
+                            "present_survival": 300000,
+                            "survival_pct": 300.0,
+                            "biomass": 600.0,
+                            "feed_pct": 6.5,
+                            "days_since_last_sampling": 27,
+                            "weekly_growth": 0.0,
+                            "avg_daily_growth": 0.0,
+                            "biomass_gain": 150.0,
+                            "weekly_biomass_gain": 38.9,
+                            "weekly_fcr": 0.27,
+                            "DOC": 63
+                        },
+                        {
+                            "sampling_date": "2026-03-11",
+                            "culture_day": 62,
+                            "abw": 2,
+                            "present_survival": 1000000,
+                            "survival_pct": 1000.0,
+                            "biomass": 2000.0,
+                            "feed_pct": 6.5,
+                            "DOC": 63
+                        },
+                        {
+                            "sampling_date": "2026-03-25",
+                            "culture_day": 76,
+                            "abw": 2,
+                            "present_survival": 350000,
+                            "survival_pct": 350.0,
+                            "biomass": 700.0,
+                            "feed_pct": 6.5,
+                            "days_since_last_sampling": 14,
+                            "weekly_growth": 0.0,
+                            "avg_daily_growth": 0.0,
+                            "biomass_gain": -1300.0,
+                            "weekly_biomass_gain": -650.0,
+                            "weekly_fcr": null,
+                            "DOC": 77
+                        }
+                    ],
+                    "water_log": [],
+                    "depth": 0
+                },
+                "2": {
+                    "area": 4000,
+                    "initial_stock": 100000,
+                    "stocking_date": "2026-01-10",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "date": "2026-02-10",
+                            "abw": 30,
+                            "present_survival": 52941,
+                            "survival_pct": 52.94,
+                            "biomass": 1588.2,
+                            "feed_pct": 1.5
+                        }
+                    ],
+                    "water_log": []
+                },
+                "3": {
+                    "area": 4000,
+                    "initial_stock": 100000,
+                    "stocking_date": "2026-01-13",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "date": "2026-02-10",
+                            "abw": 30,
+                            "present_survival": 52941,
+                            "survival_pct": 52.94,
+                            "biomass": 1588.2,
+                            "feed_pct": 1.5
+                        }
+                    ],
+                    "water_log": []
+                },
+                "4": {
+                    "area": 4000,
+                    "initial_stock": 100000,
+                    "stocking_date": "2026-02-10",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "date": "2026-02-10",
+                            "abw": 30,
+                            "present_survival": 52941,
+                            "survival_pct": 52.94,
+                            "biomass": 1588.2,
+                            "feed_pct": 1.5
+                        }
+                    ],
+                    "water_log": []
+                },
+                "5": {
+                    "area": 4000,
+                    "initial_stock": 100000,
+                    "stocking_date": "2026-01-13",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "date": "2026-02-10",
+                            "abw": 3,
+                            "present_survival": 100000,
+                            "survival_pct": 100.0,
+                            "biomass": 300.0,
+                            "feed_pct": 5.8
+                        }
+                    ],
+                    "water_log": []
+                },
+                "6": {
+                    "area": 4000,
+                    "initial_stock": 100000,
+                    "stocking_date": "2026-01-14",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 20.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 25.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "date": "2026-02-10",
+                            "abw": 333,
+                            "present_survival": 100000,
+                            "survival_pct": 100.0,
+                            "biomass": 33300.0,
+                            "feed_pct": 5.8
+                        },
+                        {
+                            "sampling_date": "2026-02-10",
+                            "culture_day": 27,
+                            "abw": 333,
+                            "sample_count": 333,
+                            "present_survival": 100000,
+                            "survival_pct": 100.0,
+                            "biomass": 33300.0,
+                            "feed_pct": 3.0,
+                            "days_since_last_sampling": 27,
+                            "weekly_growth": 0.0,
+                            "avg_daily_growth": 0.0,
+                            "biomass_gain": 0.0,
+                            "weekly_biomass_gain": 0.0,
+                            "weekly_fcr": null,
+                            "DOC": 28
+                        },
+                        {
+                            "sampling_date": "2026-02-17",
+                            "culture_day": 34,
+                            "abw": 250,
+                            "sample_count": 250,
+                            "present_survival": 125000,
+                            "survival_pct": 125.0,
+                            "biomass": 31250.0,
+                            "feed_pct": 5,
+                            "days_since_last_sampling": 7,
+                            "weekly_growth": -83.0,
+                            "avg_daily_growth": -11.857,
+                            "biomass_gain": -2050.0,
+                            "weekly_biomass_gain": -2050.0,
+                            "weekly_fcr": null,
+                            "DOC": 35
+                        }
+                    ],
+                    "water_log": []
+                },
+                "7": {
+                    "area": 4000,
+                    "initial_stock": 100000,
+                    "stocking_date": "2026-01-07",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 25.0
+                        },
+                        {
+                            "date": "2026-02-10",
+                            "feed": 30.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "sampling_date": "2026-02-17",
+                            "culture_day": 41,
+                            "abw": 3,
+                            "sample_count": 3,
+                            "present_survival": 100000,
+                            "survival_pct": 100.0,
+                            "biomass": 300.0,
+                            "feed_pct": 3.0,
+                            "DOC": 42
+                        },
+                        {
+                            "sampling_date": "2026-02-24",
+                            "culture_day": 48,
+                            "abw": 4,
+                            "sample_count": 4,
+                            "present_survival": 125000,
+                            "survival_pct": 125.0,
+                            "biomass": 500.0,
+                            "feed_pct": 5,
+                            "days_since_last_sampling": 7,
+                            "weekly_growth": 1.0,
+                            "avg_daily_growth": 0.143,
+                            "biomass_gain": 200.0,
+                            "weekly_biomass_gain": 200.0,
+                            "weekly_fcr": 0.3,
+                            "DOC": 49
+                        },
+                        {
+                            "sampling_date": "2026-03-13",
+                            "culture_day": 65,
+                            "abw": 5,
+                            "sample_count": 7,
+                            "present_survival": 250000,
+                            "survival_pct": 250.0,
+                            "biomass": 1250.0,
+                            "feed_pct": 4.5,
+                            "days_since_last_sampling": 17,
+                            "weekly_growth": 0.41,
+                            "avg_daily_growth": 0.059,
+                            "biomass_gain": 750.0,
+                            "weekly_biomass_gain": 308.8,
+                            "weekly_fcr": 0.12,
+                            "DOC": 66
+                        },
+                        {
+                            "sampling_date": "2026-02-11",
+                            "culture_day": 35,
+                            "abw": 30,
+                            "present_survival": 52941,
+                            "survival_pct": 52.94,
+                            "biomass": 1588.2,
+                            "feed_pct": 1.5,
+                            "DOC": 36
+                        }
+                    ]
+                },
+                "9": {
+                    "area": 0,
+                    "initial_stock": 100000,
+                    "stocking_date": "2026-02-10",
+                    "feed_log": [],
+                    "sampling_log": [
+                        {
+                            "sampling_date": "2026-03-11",
+                            "culture_day": 29,
+                            "abw": 2,
+                            "present_survival": 225000,
+                            "survival_pct": 225.0,
+                            "biomass": 450.0,
+                            "feed_pct": 6.5,
+                            "DOC": 30
+                        },
+                        {
+                            "sampling_date": "2026-03-18",
+                            "culture_day": 36,
+                            "abw": 2,
+                            "present_survival": 300000,
+                            "survival_pct": 300.0,
+                            "biomass": 600.0,
+                            "feed_pct": 6.5,
+                            "days_since_last_sampling": 7,
+                            "weekly_growth": 0.0,
+                            "avg_daily_growth": 0.0,
+                            "biomass_gain": 150.0,
+                            "weekly_biomass_gain": 150.0,
+                            "weekly_fcr": null,
+                            "DOC": 37
+                        },
+                        {
+                            "sampling_date": "2026-03-25",
+                            "culture_day": 43,
+                            "abw": 2,
+                            "present_survival": 400000,
+                            "survival_pct": 400.0,
+                            "biomass": 800.0,
+                            "feed_pct": 6.5,
+                            "days_since_last_sampling": 7,
+                            "weekly_growth": 0.0,
+                            "avg_daily_growth": 0.0,
+                            "biomass_gain": 200.0,
+                            "weekly_biomass_gain": 200.0,
+                            "weekly_fcr": null,
+                            "DOC": 44
+                        }
+                    ]
+                }
+            }
+        },
+        "farm": {
+            "ponds": {
+                "1": {
+                    "initial_stock": 100000,
+                    "area": 400,
+                    "depth": 10,
+                    "stocking_date": "2026-02-11",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-11",
+                            "feed": 18.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "sampling_date": "2026-02-11",
+                            "DOC": 29,
+                            "count": 200,
+                            "abw": 5.0,
+                            "biomass": 1125.0,
+                            "expected_biomass": 500.0,
+                            "survival_pct": 225.0,
+                            "feed_pct": 6.5
+                        },
+                        {
+                            "sampling_date": "2026-02-11",
+                            "DOC": 29,
+                            "count": 200,
+                            "abw": 5.0,
+                            "biomass": 1125.0,
+                            "expected_biomass": 500.0,
+                            "survival_pct": 225.0,
+                            "feed_pct": 6.5
+                        },
+                        {
+                            "sampling_date": "2026-02-11",
+                            "DOC": 29,
+                            "count": 333,
+                            "abw": 3.0,
+                            "biomass": 300.3,
+                            "expected_biomass": 300.3,
+                            "survival_pct": 100.0,
+                            "feed_pct": 5.8
+                        }
+                    ]
+                }
+            }
+        },
+        "Trail_farm": {
+            "ponds": {
+                "1": {
+                    "initial_stock": 100000,
+                    "area": 400,
+                    "depth": 10,
+                    "stocking_date": "2026-01-15",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-11",
+                            "feed": 10.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 10.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 13.5
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 20.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 27.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 30.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 32.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 41.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 43.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 47.0
+                        },
+                        {
+                            "date": "2026-02-11",
+                            "feed": 50.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "sampling_date": "2026-02-15",
+                            "DOC": 32,
+                            "count": 1000,
+                            "abw": 1.0,
+                            "biomass": 100.0,
+                            "expected_biomass": 100.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 7
+                        },
+                        {
+                            "sampling_date": "2026-02-22",
+                            "DOC": 39,
+                            "count": 500,
+                            "abw": 2.0,
+                            "biomass": 200.0,
+                            "expected_biomass": 200.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 6.6,
+                            "weekly_growth": 1.0,
+                            "weekly_ADG": 0.143,
+                            "weekly_biomass": 100.0,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 0.34
+                        },
+                        {
+                            "sampling_date": "2026-02-28",
+                            "DOC": 45,
+                            "count": 333,
+                            "abw": 3.0,
+                            "biomass": 300.3,
+                            "expected_biomass": 300.3,
+                            "survival_pct": 100.0,
+                            "feed_pct": 5.8,
+                            "weekly_growth": 1.17,
+                            "weekly_ADG": 0.167,
+                            "weekly_biomass": 117.0,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 0.51
+                        },
+                        {
+                            "sampling_date": "2026-03-04",
+                            "DOC": 49,
+                            "count": 250,
+                            "abw": 4.0,
+                            "biomass": 400.0,
+                            "expected_biomass": 400.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 5,
+                            "weekly_growth": 1.75,
+                            "weekly_ADG": 0.25,
+                            "weekly_biomass": 174.5,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 0.72
+                        },
+                        {
+                            "sampling_date": "2026-03-09",
+                            "DOC": 54,
+                            "count": 200,
+                            "abw": 5.0,
+                            "biomass": 500.0,
+                            "expected_biomass": 500.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 4.7,
+                            "weekly_growth": 1.4,
+                            "weekly_ADG": 0.2,
+                            "weekly_biomass": 140.0,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 0.71
+                        },
+                        {
+                            "sampling_date": "2026-03-14",
+                            "DOC": 59,
+                            "count": 166,
+                            "abw": 6.02,
+                            "biomass": 602.4,
+                            "expected_biomass": 602.4,
+                            "survival_pct": 100.0,
+                            "feed_pct": 4.5,
+                            "weekly_growth": 1.43,
+                            "weekly_ADG": 0.205,
+                            "weekly_biomass": 143.4,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 0.96
+                        },
+                        {
+                            "sampling_date": "2026-03-17",
+                            "DOC": 62,
+                            "count": 142,
+                            "abw": 7.04,
+                            "biomass": 704.2,
+                            "expected_biomass": 704.2,
+                            "survival_pct": 100.0,
+                            "feed_pct": 4.25,
+                            "weekly_growth": 2.39,
+                            "weekly_ADG": 0.341,
+                            "weekly_biomass": 237.6,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 1.26
+                        },
+                        {
+                            "sampling_date": "2026-03-20",
+                            "DOC": 65,
+                            "count": 125,
+                            "abw": 8.0,
+                            "biomass": 800.0,
+                            "expected_biomass": 800.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 4,
+                            "weekly_growth": 2.24,
+                            "weekly_ADG": 0.32,
+                            "weekly_biomass": 223.5,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 1.68
+                        },
+                        {
+                            "sampling_date": "2026-03-24",
+                            "DOC": 69,
+                            "count": 111,
+                            "abw": 9.01,
+                            "biomass": 900.9,
+                            "expected_biomass": 900.9,
+                            "survival_pct": 100.0,
+                            "feed_pct": 3.8,
+                            "weekly_growth": 1.77,
+                            "weekly_ADG": 0.252,
+                            "weekly_biomass": 176.6,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 1.59
+                        },
+                        {
+                            "sampling_date": "2026-03-28",
+                            "DOC": 73,
+                            "count": 100,
+                            "abw": 10.0,
+                            "biomass": 1000.0,
+                            "expected_biomass": 1000.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 3.7,
+                            "weekly_growth": 1.73,
+                            "weekly_ADG": 0.248,
+                            "weekly_biomass": 173.4,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 1.62
+                        },
+                        {
+                            "sampling_date": "2026-04-03",
+                            "DOC": 79,
+                            "count": 90,
+                            "abw": 11.11,
+                            "biomass": 1111.1,
+                            "expected_biomass": 1111.1,
+                            "survival_pct": 100.0,
+                            "feed_pct": 3.6,
+                            "weekly_growth": 1.3,
+                            "weekly_ADG": 0.185,
+                            "weekly_biomass": 129.6,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 1.44
+                        },
+                        {
+                            "sampling_date": "2026-04-07",
+                            "DOC": 83,
+                            "count": 83,
+                            "abw": 12.05,
+                            "biomass": 1204.8,
+                            "expected_biomass": 1204.8,
+                            "survival_pct": 100.0,
+                            "feed_pct": 3.4,
+                            "weekly_growth": 1.64,
+                            "weekly_ADG": 0.235,
+                            "weekly_biomass": 164.0,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 2.15
+                        },
+                        {
+                            "sampling_date": "2026-04-13",
+                            "DOC": 89,
+                            "count": 76,
+                            "abw": 13.16,
+                            "biomass": 1315.8,
+                            "expected_biomass": 1315.8,
+                            "survival_pct": 100.0,
+                            "feed_pct": 3.3,
+                            "weekly_growth": 1.29,
+                            "weekly_ADG": 0.185,
+                            "weekly_biomass": 129.5,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 2.2
+                        },
+                        {
+                            "sampling_date": "2026-04-17",
+                            "DOC": 93,
+                            "count": 71,
+                            "abw": 14.08,
+                            "biomass": 1408.5,
+                            "expected_biomass": 1408.5,
+                            "survival_pct": 100.0,
+                            "feed_pct": 3.2,
+                            "weekly_growth": 1.62,
+                            "weekly_ADG": 0.231,
+                            "weekly_biomass": 162.1,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 2.64
+                        },
+                        {
+                            "sampling_date": "2026-04-21",
+                            "DOC": 97,
+                            "count": 66.6,
+                            "abw": 15.02,
+                            "biomass": 1501.5,
+                            "expected_biomass": 1501.5,
+                            "survival_pct": 100.0,
+                            "feed_pct": 3.1,
+                            "weekly_growth": 1.64,
+                            "weekly_ADG": 0.234,
+                            "weekly_biomass": 162.8,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 3.13
+                        },
+                        {
+                            "sampling_date": "2026-04-21",
+                            "DOC": 97,
+                            "count": 62.5,
+                            "abw": 16.0,
+                            "biomass": 1600.0,
+                            "expected_biomass": 1600.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 2.9
+                        },
+                        {
+                            "sampling_date": "2026-04-25",
+                            "DOC": 101,
+                            "count": 58.8,
+                            "abw": 17.01,
+                            "biomass": 1700.7,
+                            "expected_biomass": 1700.7,
+                            "survival_pct": 100.0,
+                            "feed_pct": 2.8,
+                            "weekly_growth": 1.76,
+                            "weekly_ADG": 0.252,
+                            "weekly_biomass": 176.2,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 2.9
+                        },
+                        {
+                            "sampling_date": "2026-04-28",
+                            "DOC": 104,
+                            "count": 55.5,
+                            "abw": 18.02,
+                            "biomass": 1801.8,
+                            "expected_biomass": 1801.8,
+                            "survival_pct": 100.0,
+                            "feed_pct": 2.8,
+                            "weekly_growth": 2.35,
+                            "weekly_ADG": 0.336,
+                            "weekly_biomass": 235.9,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 3.38
+                        },
+                        {
+                            "sampling_date": "2026-05-04",
+                            "DOC": 110,
+                            "count": 52.6,
+                            "abw": 19.01,
+                            "biomass": 1901.1,
+                            "expected_biomass": 1901.1,
+                            "survival_pct": 100.0,
+                            "feed_pct": 2.7,
+                            "weekly_growth": 1.16,
+                            "weekly_ADG": 0.165,
+                            "weekly_biomass": 115.9,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 3.44
+                        },
+                        {
+                            "sampling_date": "2026-05-08",
+                            "DOC": 114,
+                            "count": 52.6,
+                            "abw": 19.01,
+                            "biomass": 1828.0,
+                            "expected_biomass": 1901.1,
+                            "survival_pct": 96.15,
+                            "feed_pct": 2.7,
+                            "weekly_growth": 0.0,
+                            "weekly_ADG": 0.0,
+                            "weekly_biomass": -127.9,
+                            "weekly_survival": -3.85,
+                            "weekly_FCR": null
+                        },
+                        {
+                            "sampling_date": "2026-05-11",
+                            "DOC": 117,
+                            "count": 50,
+                            "abw": 20.0,
+                            "biomass": 2000.0,
+                            "expected_biomass": 2000.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 2.6,
+                            "weekly_growth": 2.31,
+                            "weekly_ADG": 0.33,
+                            "weekly_biomass": 401.3,
+                            "weekly_survival": 3.85,
+                            "weekly_FCR": 1.99
+                        },
+                        {
+                            "sampling_date": "2026-05-11",
+                            "DOC": 117,
+                            "count": 50,
+                            "abw": 20.0,
+                            "biomass": 2000.0,
+                            "expected_biomass": 2000.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 2.6
+                        },
+                        {
+                            "sampling_date": "2026-03-12",
+                            "DOC": 57,
+                            "count": 333,
+                            "abw": 3.0,
+                            "biomass": 300.3,
+                            "expected_biomass": 300.3,
+                            "survival_pct": 100.0,
+                            "feed_pct": 5.8
+                        }
+                    ]
+                },
+                "11": {
+                    "initial_stock": 0,
+                    "area": 0,
+                    "depth": 0,
+                    "stocking_date": "2026-02-12",
+                    "feed_log": [],
+                    "sampling_log": []
+                }
+            }
+        },
+        "Trail_Farm": {
+            "ponds": {
+                "1": {
+                    "area": 0,
+                    "initial_stock": 0,
+                    "stocking_date": "2026-02-11",
+                    "feed_log": [],
+                    "sampling_log": [],
+                    "water_log": [
+                        {
+                            "temp": 30.0,
+                            "do": 5.0,
+                            "ammonia": 0.2,
+                            "nitrite": 0.3,
+                            "ph": 7.8
+                        },
+                        {
+                            "temp": 30.0,
+                            "do": 5.0,
+                            "ammonia": 0.2,
+                            "nitrite": 0.3,
+                            "ph": 7.8
+                        },
+                        {
+                            "temp": 30.0,
+                            "do": 5.0,
+                            "ammonia": 0.2,
+                            "nitrite": 0.3,
+                            "ph": 7.8
+                        },
+                        {
+                            "temp": 30.0,
+                            "do": 5.0,
+                            "ammonia": 0.2,
+                            "nitrite": 0.3,
+                            "ph": 7.8
+                        },
+                        {
+                            "temp": 30.0,
+                            "do": 5.0,
+                            "ammonia": 0.2,
+                            "nitrite": 0.3,
+                            "ph": 7.8
+                        }
+                    ]
+                }
+            }
+        },
+        "Farm": {
+            "ponds": {
+                "10": {
+                    "initial_stock": 0,
+                    "area": 0,
+                    "depth": 0,
+                    "stocking_date": "2026-02-12",
+                    "feed_log": [],
+                    "sampling_log": []
+                },
+                "11": {
+                    "initial_stock": 100000,
+                    "area": 4000,
+                    "depth": 10,
+                    "stocking_date": "2026-02-12",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-12",
+                            "feed": 18.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "sampling_date": "2026-03-12",
+                            "DOC": 29,
+                            "count": 333,
+                            "abw": 3.0,
+                            "biomass": 300.3,
+                            "expected_biomass": 300.3,
+                            "survival_pct": 100.0,
+                            "feed_pct": 5.8
+                        }
+                    ]
+                }
+            }
+        },
+        "Karaikal": {
+            "ponds": {
+                "1": {
+                    "initial_stock": 250000,
+                    "area": 4000,
+                    "depth": 1,
+                    "stocking_date": "2026-01-14",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-12",
+                            "feed": 18.0
+                        },
+                        {
+                            "date": "2026-02-12",
+                            "feed": 24.0
+                        },
+                        {
+                            "date": "2026-02-12",
+                            "feed": 20.0
+                        },
+                        {
+                            "date": "2026-02-12",
+                            "feed": 26.0
+                        },
+                        {
+                            "date": "2026-02-12",
+                            "feed": 53.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "sampling_date": "2026-02-13",
+                            "DOC": 31,
+                            "count": 333,
+                            "abw": 3.0,
+                            "biomass": 300.3,
+                            "expected_biomass": 300.3,
+                            "survival_pct": 100.0,
+                            "feed_pct": 5.8
+                        },
+                        {
+                            "sampling_date": "2026-02-25",
+                            "DOC": 43,
+                            "count": 200,
+                            "abw": 5.0,
+                            "biomass": 500.0,
+                            "expected_biomass": 500.0,
+                            "survival_pct": 100.0,
+                            "feed_pct": 4.7,
+                            "weekly_growth": 1.17,
+                            "weekly_ADG": 0.167,
+                            "weekly_biomass": 116.5,
+                            "weekly_survival": 0.0,
+                            "weekly_FCR": 0.21
+                        },
+                        {
+                            "sampling_date": "2026-02-16",
+                            "DOC": 34,
+                            "count": 250,
+                            "abw": 4.0,
+                            "biomass": 400.0,
+                            "expected_biomass": 1000.0,
+                            "survival_pct": 40.0,
+                            "feed_pct": 5
+                        },
+                        {
+                            "sampling_date": "2026-02-27",
+                            "DOC": 45,
+                            "count": 142,
+                            "abw": 7.04,
+                            "biomass": 610.3,
+                            "expected_biomass": 1760.6,
+                            "survival_pct": 34.67,
+                            "feed_pct": 4.25,
+                            "weekly_growth": 1.94,
+                            "weekly_ADG": 0.277,
+                            "weekly_biomass": 133.8,
+                            "weekly_survival": -5.33,
+                            "weekly_FCR": 0.42
+                        },
+                        {
+                            "sampling_date": "2026-02-27",
+                            "DOC": 45,
+                            "count": 142,
+                            "abw": 7.04,
+                            "biomass": 1244.1,
+                            "expected_biomass": 1760.6,
+                            "survival_pct": 70.67,
+                            "feed_pct": 4.25
+                        }
+                    ]
+                }
+            }
+        },
+        "example": {
+            "ponds": {
+                "1": {
+                    "initial_stock": 250000,
+                    "area": 4000,
+                    "depth": 1,
+                    "stocking_date": "2026-01-14",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-12",
+                            "feed": 56.0
+                        },
+                        {
+                            "date": "2026-02-12",
+                            "feed": 65.0
+                        },
+                        {
+                            "date": "2026-02-12",
+                            "feed": 75.0
+                        },
+                        {
+                            "date": "2026-02-12",
+                            "feed": 75.0
+                        },
+                        {
+                            "date": "2026-02-12",
+                            "feed": 52.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "sampling_date": "2026-02-16",
+                            "DOC": 34,
+                            "count": 142,
+                            "abw": 7.04,
+                            "biomass": 1525.8,
+                            "expected_biomass": 1760.6,
+                            "survival_pct": 86.67,
+                            "feed_pct": 4.25
+                        },
+                        {
+                            "sampling_date": "2026-02-21",
+                            "DOC": 39,
+                            "count": 142,
+                            "abw": 7.04,
+                            "biomass": 1760.6,
+                            "expected_biomass": 1760.6,
+                            "survival_pct": 100.0,
+                            "feed_pct": 4.25,
+                            "weekly_growth": 0.0,
+                            "weekly_ADG": 0.0,
+                            "weekly_biomass": 328.7,
+                            "weekly_survival": 13.33,
+                            "weekly_FCR": 0.83
+                        },
+                        {
+                            "sampling_date": "2026-02-21",
+                            "DOC": 39,
+                            "count": 142,
+                            "abw": 7.04,
+                            "biomass": 1760.6,
+                            "expected_biomass": 1760.6,
+                            "survival_pct": 100.0,
+                            "feed_pct": 4.25,
+                            "present_numbers": 250000.00000000003
+                        },
+                        {
+                            "sampling_date": "2026-02-21",
+                            "DOC": 39,
+                            "count": 142,
+                            "abw": 7.04,
+                            "biomass": 1760.6,
+                            "expected_biomass": 1760.6,
+                            "survival_pct": 100.0,
+                            "feed_pct": 4.25,
+                            "present_numbers": 250000.0
+                        },
+                        {
+                            "sampling_date": "2026-02-21",
+                            "DOC": 39,
+                            "count": 250,
+                            "abw": 4.0,
+                            "biomass": 1040.0,
+                            "expected_biomass": 1000.0,
+                            "survival_pct": 104.0,
+                            "feed_pct": 5.0,
+                            "present_numbers": 260000.0
+                        },
+                        {
+                            "sampling_date": "2026-02-21",
+                            "DOC": 39,
+                            "count": 250,
+                            "abw": 4.0,
+                            "biomass": 1040.0,
+                            "survival_pct": 104.0,
+                            "feed_pct": 5.0,
+                            "present_numbers": 260000.0
+                        }
+                    ]
+                }
+            }
+        },
+        "Trail1": {
+            "ponds": {
+                "1": {
+                    "initial_stock": 100000,
+                    "area": 4000,
+                    "depth": 1,
+                    "stocking_date": "2026-02-13",
+                    "feed_log": [],
+                    "sampling_log": []
+                }
+            }
+        },
+        "pond": {
+            "ponds": {
+                "x": {
+                    "initial_stock": 100000,
+                    "area": 40000,
+                    "depth": 1,
+                    "stocking_date": "2026-01-01",
+                    "feed_log": [
+                        {
+                            "date": "2026-02-13",
+                            "feed": 18.0
+                        }
+                    ],
+                    "sampling_log": [
+                        {
+                            "sampling_date": "2026-02-13",
+                            "DOC": 44,
+                            "count": 333,
+                            "abw": 3.0,
+                            "biomass": 300.3,
+                            "survival_pct": 100.0,
+                            "feed_pct": 5.99,
+                            "present_numbers": 100000.0
+                        }
+                    ]
+                }
+            }
+        }
+    }
+}

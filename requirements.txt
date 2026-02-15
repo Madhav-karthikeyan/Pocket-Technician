@@ -1,1 +1,6 @@
-pip install reportlab
+streamlit
+pandas
+matplotlib
+reportlab
+openpyxl
+requests

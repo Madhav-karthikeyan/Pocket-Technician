@@ -1783,7 +1783,7 @@ if st.button("Generate Advanced PDF Report"):
                 row["DOC"],
                 row["abw"],
                 row.get("count", "-"),
-                row["survival"],
+                row["survival_pct"],
                 row["biomass"]
             ])
 
@@ -2068,5 +2068,6 @@ if st.button("Generate Multi-Pond Farm Report"):
         )
 
     st.success("Report generated successfully!")
+
 
 

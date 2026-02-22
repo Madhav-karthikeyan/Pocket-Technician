@@ -3,29 +3,24 @@ import json, os
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import date, datetime
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Image,
+    Table,
+    PageBreak,
+)
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate
 from reportlab.platypus import Image as RLImage
 import openpyxl
 import requests
-import pandas as pd
-from datetime import datetime
 from astral import moon
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import A4
-from datetime import datetime
-import matplotlib.pyplot as plt
-import pandas as pd
-from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table,
-        Image, PageBreak
-        )
-import os
+import sqlite3
 
 
 
@@ -46,6 +41,17 @@ def get_moon_name(phase):
 # CONFIG
 # =====================================================
 DATA_FILE = "farm_data.json"
+DB_FILE = "farm_data.db"
+
+
+SUPPORT_NOTE = (
+    "Please refresh the page or contact the team at "
+    "madhavkarthikeyan2@gmail.com."
+)
+
+
+def show_support_note():
+    st.info(SUPPORT_NOTE)
 
 
 # Reference chart: Count per kg → %Feed → Feed per 100k
@@ -1029,22 +1035,115 @@ REFERENCE_FEED_CHART = {
 # ==============================
 # LOAD DATA (ONLY ONCE)
 # ==============================
+def _default_data():
+    return {"farms": {}}
+
+
+def _deep_merge_dict(base, updates):
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge_dict(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def _get_db_connection():
+    conn = sqlite3.connect(DB_FILE, timeout=30, isolation_level=None)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
+    return conn
+
+
+def _ensure_db():
+    with _get_db_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                payload TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+
+def _migrate_json_to_db_if_needed():
+    if not os.path.exists(DATA_FILE):
+        return
+    try:
+        with _get_db_connection() as conn:
+            row = conn.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
+            if row:
+                return
+
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                data = _default_data()
+            data.setdefault("farms", {})
+
+        with _get_db_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO app_state (id, payload, updated_at)
+                VALUES (1, ?, ?)
+                """,
+                (json.dumps(data), datetime.now().isoformat()),
+            )
+            conn.execute("COMMIT")
+    except Exception as e:
+        st.warning(f"JSON-to-DB migration skipped: {e}")
+
+
+def _load_data_from_db():
+    try:
+        with _get_db_connection() as conn:
+            row = conn.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
+            if not row:
+                return _default_data()
+            loaded = json.loads(row[0])
+            if isinstance(loaded, dict):
+                loaded.setdefault("farms", {})
+                return loaded
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        show_support_note()
+    return _default_data()
+
+
+_ensure_db()
+_migrate_json_to_db_if_needed()
+
 if "data" not in st.session_state:
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            st.session_state.data = json.load(f)
-    else:
-        st.session_state.data = {"farms": {}}
+    st.session_state.data = _load_data_from_db()
 
 # ==============================
 # SAVE FUNCTION
 # ==============================
 def save_data():
     try:
-        with open(DATA_FILE, "w") as f:
-            json.dump(st.session_state.data, f, indent=4)
+        with _get_db_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
+            latest = _default_data() if not row else json.loads(row[0])
+            latest.setdefault("farms", {})
+            merged = _deep_merge_dict(latest, st.session_state.data)
+            payload = json.dumps(merged)
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO app_state (id, payload, updated_at)
+                VALUES (1, ?, ?)
+                """,
+                (payload, datetime.now().isoformat()),
+            )
+            conn.execute("COMMIT")
+            st.session_state.data = merged
     except Exception as e:
         st.error(f"Error saving data: {e}")
+        show_support_note()
 
 # ==============================
 # SHORTCUT VARIABLE
@@ -1072,8 +1171,6 @@ for farm in data["farms"].values():
                 ).days + 1
 
 save_data()
-from datetime import datetime
-from astral import moon
 
 today = datetime.now().date()
 moon_phase = moon.phase(today)
@@ -1104,6 +1201,22 @@ def doc_calc(stocking_date, sampling_date):
 def nearest_count(count):
     return min(REFERENCE_FEED_CHART.keys(), key=lambda x: abs(x - count))
 
+
+def get_survival_value(record, default=0):
+    """Backward compatible survival lookup for mixed historical logs."""
+    return record.get("survival_pct", record.get("survival", default))
+
+
+def ensure_survival_pct(df):
+    """Normalize sampling DataFrame to always include survival_pct."""
+    if "survival_pct" in df.columns:
+        return df
+    if "survival" in df.columns:
+        df["survival_pct"] = df["survival"]
+    else:
+        df["survival_pct"] = 0
+    return df
+
 # =====================================================
 # SAMPLING ENGINE (CORRECTED)
 # =====================================================
@@ -1121,8 +1234,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
     
     current_survival = (daily_feed / chart["feed_100k"]) * 100000
     biomass = (current_survival * abw) / 1000
-    present_numbers= (biomass/abw)*1000
-      #survival_pct = (present_numbers / pond["initial_stock"]) * 100
+    present_numbers = (biomass / abw) * 1000
     survival_pct = (present_numbers / pond["initial_stock"]) * 100
     excess_feed_flag = False
     excess_feed_qty = 0
@@ -1144,6 +1256,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
         "abw": round(abw,2),
         "biomass": round(biomass,1),
        # "expected_biomass": round(expected_biomass,1),
+        "survival_pct": round(survival_pct,2),
         "survival": round(survival_pct,2),
         #"feed_pct": chart["feed_pct"],
         "present_numbers": round(present_numbers,1),
@@ -1162,7 +1275,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
         if gap > 0:
             weight_gain = abw - last["abw"]
             biomass_gain = biomass - last["biomass"]
-            survival_change = survival_pct - last["survival"]
+            survival_change = survival_pct - get_survival_value(last)
 
             feed_used = sum(f["feed"] for f in pond["feed_log"])
 
@@ -1225,7 +1338,12 @@ from geopy.geocoders import Nominatim
 if location:
 
     geolocator = Nominatim(user_agent="shrimp_app")
-    location_obj = geolocator.geocode(location)
+    try:
+        location_obj = geolocator.geocode(location, timeout=8)
+    except Exception as e:
+        st.error(f"Unable to fetch location: {e}")
+        show_support_note()
+        st.stop()
 
     if not location_obj:
         st.error("Location not found (try nearby town) or check the spelling")
@@ -1250,10 +1368,30 @@ if location:
         "timezone": "auto"
     }
 
-    weather = requests.get(weather_url, params=weather_params, timeout=10).json()
+    try:
+        weather_response = requests.get(weather_url, params=weather_params, timeout=8)
+        weather_response.raise_for_status()
+        weather = weather_response.json()
+    except requests.exceptions.Timeout:
+        st.error("Weather service timed out. Please try again.")
+        show_support_note()
+        st.stop()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Weather service error: {e}")
+        show_support_note()
+        st.stop()
+    except ValueError:
+        st.error("Weather service returned an invalid response.")
+        show_support_note()
+        st.stop()
     # ----------------------
     # Extract Current Data
     # ----------------------
+    if "current_weather" not in weather or "hourly" not in weather or "daily" not in weather:
+        st.error("Weather data is incomplete right now.")
+        show_support_note()
+        st.stop()
+
     current_temp = weather["current_weather"]["temperature"]
     current_wind = weather["current_weather"]["windspeed"]
 
@@ -1530,6 +1668,7 @@ if "pending_sampling" in st.session_state:
 # Graph
 if pond["sampling_log"]:
     df = pd.DataFrame(pond["sampling_log"])
+    should_save = False
 
     # ===== SAFE DOC CREATION FOR OLD DATA =====
     if "DOC" not in df.columns:
@@ -1538,7 +1677,13 @@ if pond["sampling_log"]:
         df["DOC"] = df["sampling_date"].apply(
             lambda x: (datetime.fromisoformat(x).date() - stocking_date).days + 1
         )
+        should_save = True
 
+    if "survival_pct" not in df.columns:
+        df = ensure_survival_pct(df)
+        should_save = True
+
+    if should_save:
         # Save upgraded data permanently
         pond["sampling_log"] = df.to_dict("records")
         save_data()
@@ -1581,6 +1726,7 @@ st.subheader("📉 Mortality Curve")
 
 if pond["sampling_log"]:
     df = pd.DataFrame(pond["sampling_log"])
+    df = ensure_survival_pct(df)
     df["mortality_pct"] = 100 - df["survival_pct"]
 
     fig, ax = plt.subplots()
@@ -1621,7 +1767,7 @@ target_size = st.number_input("Target Harvest Size (g)", value=25)
 if pond["sampling_log"]:
     latest = pond["sampling_log"][-1]
     current_abw = latest["abw"]
-    survival = latest["survival_pct"]
+    survival = get_survival_value(latest)
     biomass = latest["biomass"]
 
     if current_abw >= target_size:
@@ -1657,6 +1803,7 @@ if st.button("Generate Advanced PDF Report"):
     else:
 
         df = pd.DataFrame(pond["sampling_log"])
+        df = ensure_survival_pct(df)
 
         # Ensure DOC exists
         if "DOC" not in df.columns:
@@ -1783,7 +1930,7 @@ if st.button("Generate Advanced PDF Report"):
                 row["DOC"],
                 row["abw"],
                 row.get("count", "-"),
-                row["survival_pct"],
+                row.get("survival_pct", row.get("survival", 0)),
                 row["biomass"]
             ])
 
@@ -1911,7 +2058,7 @@ if st.button("Generate Multi-Pond Farm Report", key="multi_farm_report"):
         latest = df.iloc[-1]
 
         biomass = latest.get("biomass", 0)
-        survival = latest.get("survival_pct", 0)
+        survival = latest.get("survival_pct", latest.get("survival", 0))
         fcr = latest.get("weekly_FCR", 1.5)
 
         score = (
@@ -2105,7 +2252,6 @@ if st.button("Generate Multi-Pond Farm Report", key="multi_farm_report"):
         )
 
     st.success("Report generated successfully!")
-
 
 
 

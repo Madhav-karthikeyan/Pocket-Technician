@@ -1686,7 +1686,7 @@ if st.button("Generate Advanced PDF Report"):
 
         # Mortality graph
         mortality_img = "mortality_curve.png"
-        df["mortality_pct"] = 100 - df["survival"]
+        df["mortality_pct"] = 100 - df["survival_pct"]
 
         fig2, ax2 = plt.subplots()
         ax2.plot(df["DOC"], df["mortality_pct"], marker="o", color="red")
@@ -2068,4 +2068,5 @@ if st.button("Generate Multi-Pond Farm Report"):
         )
 
     st.success("Report generated successfully!")
+
 

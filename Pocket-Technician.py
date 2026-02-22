@@ -1109,6 +1109,17 @@ def get_survival_value(record, default=0):
     """Backward compatible survival lookup for mixed historical logs."""
     return record.get("survival_pct", record.get("survival", default))
 
+
+def ensure_survival_pct(df):
+    """Normalize sampling DataFrame to always include survival_pct."""
+    if "survival_pct" in df.columns:
+        return df
+    if "survival" in df.columns:
+        df["survival_pct"] = df["survival"]
+    else:
+        df["survival_pct"] = 0
+    return df
+
 # =====================================================
 # SAMPLING ENGINE (CORRECTED)
 # =====================================================
@@ -1126,8 +1137,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
     
     current_survival = (daily_feed / chart["feed_100k"]) * 100000
     biomass = (current_survival * abw) / 1000
-    present_numbers= (biomass/abw)*1000
-      #survival_pct = (present_numbers / pond["initial_stock"]) * 100
+    present_numbers = (biomass / abw) * 1000
     survival_pct = (present_numbers / pond["initial_stock"]) * 100
     excess_feed_flag = False
     excess_feed_qty = 0
@@ -1536,6 +1546,7 @@ if "pending_sampling" in st.session_state:
 # Graph
 if pond["sampling_log"]:
     df = pd.DataFrame(pond["sampling_log"])
+    should_save = False
 
     # ===== SAFE DOC CREATION FOR OLD DATA =====
     if "DOC" not in df.columns:
@@ -1544,7 +1555,13 @@ if pond["sampling_log"]:
         df["DOC"] = df["sampling_date"].apply(
             lambda x: (datetime.fromisoformat(x).date() - stocking_date).days + 1
         )
+        should_save = True
 
+    if "survival_pct" not in df.columns:
+        df = ensure_survival_pct(df)
+        should_save = True
+
+    if should_save:
         # Save upgraded data permanently
         pond["sampling_log"] = df.to_dict("records")
         save_data()
@@ -1587,8 +1604,7 @@ st.subheader("📉 Mortality Curve")
 
 if pond["sampling_log"]:
     df = pd.DataFrame(pond["sampling_log"])
-    if "survival_pct" not in df.columns and "survival" in df.columns:
-        df["survival_pct"] = df["survival"]
+    df = ensure_survival_pct(df)
     df["mortality_pct"] = 100 - df["survival_pct"]
 
     fig, ax = plt.subplots()
@@ -1665,8 +1681,7 @@ if st.button("Generate Advanced PDF Report"):
     else:
 
         df = pd.DataFrame(pond["sampling_log"])
-        if "survival_pct" not in df.columns and "survival" in df.columns:
-            df["survival_pct"] = df["survival"]
+        df = ensure_survival_pct(df)
 
         # Ensure DOC exists
         if "DOC" not in df.columns:

@@ -1122,18 +1122,18 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
     current_survival = (daily_feed / chart["feed_100k"]) * 100000
     biomass = (current_survival * abw) / 1000
     present_numbers= (biomass/abw)*1000
-      #survival_pct = (present_numbers / pond["initial_stock"]) * 100
-    survival_pct = (present_numbers / pond["initial_stock"]) * 100
+      #survival = (present_numbers / pond["initial_stock"]) * 100
+    survival = (present_numbers / pond["initial_stock"]) * 100
     excess_feed_flag = False
     excess_feed_qty = 0
-    if survival_pct > 100:
+    if survival > 100:
         excess_feed_flag = True
     
     # Calculate theoretical max feed based on 100% survival
     max_feed_allowed = chart["feed_100k"] * (pond["initial_stock"] / 100000)
     excess_feed_qty = daily_feed - max_feed_allowed
     
-    #survival_pct = 100  # Cap survival
+    #survival = 100  # Cap survival
    
     #expected_biomass = (pond["initial_stock"] * abw) / 1000
 
@@ -1144,7 +1144,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
         "abw": round(abw,2),
         "biomass": round(biomass,1),
        # "expected_biomass": round(expected_biomass,1),
-        "survival": round(survival_pct,2),
+        "survival": round(survival,2),
         #"feed_pct": chart["feed_pct"],
         "present_numbers": round(present_numbers,1),
         #"excess_feed_flag": excess_feed_flag,
@@ -1162,7 +1162,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
         if gap > 0:
             weight_gain = abw - last["abw"]
             biomass_gain = biomass - last["biomass"]
-            survival_change = survival_pct - last["survival"]
+            survival_change = survival - last["survival"]
 
             feed_used = sum(f["feed"] for f in pond["feed_log"])
 
@@ -2068,3 +2068,4 @@ if st.button("Generate Multi-Pond Farm Report"):
         )
 
     st.success("Report generated successfully!")
+

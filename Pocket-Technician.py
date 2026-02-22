@@ -1970,7 +1970,8 @@ if st.button("Generate Multi-Pond Farm Report"):
     # -------------------------
     # Growth Chart
     plt.figure()
-    for pond_name, pond in data["farms"][farm_name]["ponds"].items():
+    
+for pond_name, pond in data["farms"][farm_name]["ponds"].items():
 
     if not pond.get("sampling_log"):
         continue
@@ -2005,6 +2006,9 @@ if st.button("Generate Multi-Pond Farm Report"):
             )
         else:
             continue
+
+    # Now safe to plot
+    plt.plot(df["DOC"], df["biomass"], label=pond_name)
 
     # Now safe to plot
     plt.plot(df["DOC"], df["biomass"], label=pond_name)
@@ -2102,6 +2106,7 @@ if st.button("Generate Multi-Pond Farm Report"):
         )
 
     st.success("Report generated successfully!")
+
 
 
 

@@ -1621,7 +1621,7 @@ target_size = st.number_input("Target Harvest Size (g)", value=25)
 if pond["sampling_log"]:
     latest = pond["sampling_log"][-1]
     current_abw = latest["abw"]
-    survival = latest["survival"]
+    survival = latest["survival_pct"]
     biomass = latest["biomass"]
 
     if current_abw >= target_size:
@@ -2068,3 +2068,4 @@ if st.button("Generate Multi-Pond Farm Report"):
         )
 
     st.success("Report generated successfully!")
+

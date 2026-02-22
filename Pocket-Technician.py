@@ -20,8 +20,7 @@ from astral import moon
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-import tempfile
-import fcntl
+import sqlite3
 
 
 
@@ -41,8 +40,9 @@ def get_moon_name(phase):
 # =====================================================
 # CONFIG
 # =====================================================
-DATA_FILE = "farm_data.json"
-LOCK_FILE = f"{DATA_FILE}.lock"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
+DATA_FILE = os.path.join(BASE_DIR, "farm_data.json")
+DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
 
 
 SUPPORT_NOTE = (
@@ -1040,65 +1040,105 @@ def _default_data():
     return {"farms": {}}
 
 
-def _deep_merge_dict(base, updates):
-    """Merge nested dictionaries so concurrent users don't drop each other's keys."""
-    for key, value in updates.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            _deep_merge_dict(base[key], value)
-        else:
-            base[key] = value
-    return base
-
-
-def _load_data_file():
-    if not os.path.exists(DATA_FILE):
-        return _default_data()
+def _write_json_backup(payload):
     try:
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=4)
+    except Exception:
+        # Backup write should never block primary DB save.
+        pass
+
+
+def _get_db_connection():
+    conn = sqlite3.connect(DB_FILE, timeout=30, isolation_level=None)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=30000;")
+    return conn
+
+
+def _ensure_db():
+    with _get_db_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                payload TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+
+def _migrate_json_to_db_if_needed():
+    if not os.path.exists(DATA_FILE):
+        return
+    try:
+        with _get_db_connection() as conn:
+            row = conn.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
+            if row:
+                return
+
         with open(DATA_FILE, "r", encoding="utf-8") as f:
-            loaded = json.load(f)
+            data = json.load(f)
+            if not isinstance(data, dict):
+                data = _default_data()
+            data.setdefault("farms", {})
+
+        with _get_db_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO app_state (id, payload, updated_at)
+                VALUES (1, ?, ?)
+                """,
+                (json.dumps(data), datetime.now().isoformat()),
+            )
+            conn.execute("COMMIT")
+    except Exception as e:
+        st.warning(f"JSON-to-DB migration skipped: {e}")
+
+
+def _load_data_from_db():
+    try:
+        with _get_db_connection() as conn:
+            row = conn.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
+            if not row:
+                return _default_data()
+            loaded = json.loads(row[0])
             if isinstance(loaded, dict):
                 loaded.setdefault("farms", {})
                 return loaded
-    except json.JSONDecodeError:
-        backup = f"{DATA_FILE}.corrupt.{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        os.replace(DATA_FILE, backup)
-        st.error(f"Detected corrupted data file. Backup created: {backup}")
-        show_support_note()
     except Exception as e:
         st.error(f"Error loading data: {e}")
         show_support_note()
     return _default_data()
 
 
-def _atomic_write_json(payload):
-    dir_name = os.path.dirname(os.path.abspath(DATA_FILE)) or "."
-    fd, temp_path = tempfile.mkstemp(prefix="farm_data_", suffix=".tmp", dir=dir_name)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
-            json.dump(payload, tmp_file, indent=4)
-            tmp_file.flush()
-            os.fsync(tmp_file.fileno())
-        os.replace(temp_path, DATA_FILE)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-
+_ensure_db()
+_migrate_json_to_db_if_needed()
 
 if "data" not in st.session_state:
-    st.session_state.data = _load_data_file()
+    st.session_state.data = _load_data_from_db()
 
 # ==============================
 # SAVE FUNCTION
 # ==============================
 def save_data():
     try:
-        with open(LOCK_FILE, "w", encoding="utf-8") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
-            latest_disk_data = _load_data_file()
-            merged_data = _deep_merge_dict(latest_disk_data, st.session_state.data)
-            _atomic_write_json(merged_data)
-            st.session_state.data = merged_data
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+        payload_dict = st.session_state.data
+        payload_json = json.dumps(payload_dict)
+        with _get_db_connection() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO app_state (id, payload, updated_at)
+                VALUES (1, ?, ?)
+                """,
+                (payload_json, datetime.now().isoformat()),
+            )
+            conn.execute("COMMIT")
+        _write_json_backup(payload_dict)
     except Exception as e:
         st.error(f"Error saving data: {e}")
         show_support_note()
@@ -1158,22 +1198,6 @@ def doc_calc(stocking_date, sampling_date):
 
 def nearest_count(count):
     return min(REFERENCE_FEED_CHART.keys(), key=lambda x: abs(x - count))
-
-
-def get_survival_value(record, default=0):
-    """Backward compatible survival lookup for mixed historical logs."""
-    return record.get("survival_pct", record.get("survival", default))
-
-
-def ensure_survival_pct(df):
-    """Normalize sampling DataFrame to always include survival_pct."""
-    if "survival_pct" in df.columns:
-        return df
-    if "survival" in df.columns:
-        df["survival_pct"] = df["survival"]
-    else:
-        df["survival_pct"] = 0
-    return df
 
 
 def get_survival_value(record, default=0):
@@ -2226,9 +2250,3 @@ if st.button("Generate Multi-Pond Farm Report", key="multi_farm_report"):
         )
 
     st.success("Report generated successfully!")
-
-
-
-
-
-

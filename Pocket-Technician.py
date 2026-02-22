@@ -9,9 +9,39 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate
 from reportlab.platypus import Image as RLImage
 import openpyxl
+import requests
+import pandas as pd
+from datetime import datetime
+from astral import moon
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.lib.pagesizes import A4
+from datetime import datetime
+import matplotlib.pyplot as plt
+import pandas as pd
+from reportlab.platypus import (
+            SimpleDocTemplate, Paragraph, Spacer, Table,
+        Image, PageBreak
+        )
+import os
 
 
 
+def get_moon_name(phase):
+    if phase == 0:
+        return "New Moon (Amavasya)"
+    elif phase == 14:
+        return "Full Moon (Pournami)"
+    elif phase < 7:
+        return "Waxing Crescent"
+    elif phase < 14:
+        return "Waxing Gibbous"
+    elif phase < 21:
+        return "Waning Gibbous"
+    else:
+        return "Waning Crescent"
 # =====================================================
 # CONFIG
 # =====================================================
@@ -995,17 +1025,31 @@ REFERENCE_FEED_CHART = {
 # =====================================================
 # STORAGE
 # =====================================================
-def load_data():
+# Load once
+# ==============================
+# LOAD DATA (ONLY ONCE)
+# ==============================
+if "data" not in st.session_state:
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    return {"farms": {}}
+            st.session_state.data = json.load(f)
+    else:
+        st.session_state.data = {"farms": {}}
 
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+# ==============================
+# SAVE FUNCTION
+# ==============================
+def save_data():
+    try:
+        with open(DATA_FILE, "w") as f:
+            json.dump(st.session_state.data, f, indent=4)
+    except Exception as e:
+        st.error(f"Error saving data: {e}")
 
-data = load_data()
+# ==============================
+# SHORTCUT VARIABLE
+# ==============================
+data = st.session_state.data
 # =====================================================
 # AUTO-UPGRADE OLD SAMPLING DATA (ADD HERE)
 # =====================================================
@@ -1027,7 +1071,28 @@ for farm in data["farms"].values():
                     - stocking_date
                 ).days + 1
 
-save_data(data)
+save_data()
+from datetime import datetime
+from astral import moon
+
+today = datetime.now().date()
+moon_phase = moon.phase(today)
+# =====================================================
+# Moon phase
+# =====================================================
+def get_moon_name(phase):
+    if phase == 0:
+        return "New Moon (Amavasya)"
+    elif phase == 14:
+        return "Full Moon (Pournami)"
+    elif phase < 7:
+        return "Waxing Crescent"
+    elif phase < 14:
+        return "Waxing Gibbous"
+    elif phase < 21:
+        return "Waning Gibbous"
+    else:
+        return "Waning Crescent"
 
 # =====================================================
 # CORE UTILITIES
@@ -1053,11 +1118,22 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
     DOC = doc_calc(pond["stocking_date"], sampling_date)
 
     # Survival calculation
+    
     current_survival = (daily_feed / chart["feed_100k"]) * 100000
     biomass = (current_survival * abw) / 1000
-    present_numbers= (biomass*count_input)
-    survival_pct = (present_numbers/ pond["initial_stock"]) * 100
-
+    present_numbers= (biomass/abw)*1000
+      #survival_pct = (present_numbers / pond["initial_stock"]) * 100
+    survival_pct = (present_numbers / pond["initial_stock"]) * 100
+    excess_feed_flag = False
+    excess_feed_qty = 0
+    if survival_pct > 100:
+        excess_feed_flag = True
+    
+    # Calculate theoretical max feed based on 100% survival
+    max_feed_allowed = chart["feed_100k"] * (pond["initial_stock"] / 100000)
+    excess_feed_qty = daily_feed - max_feed_allowed
+    
+    #survival_pct = 100  # Cap survival
    
     #expected_biomass = (pond["initial_stock"] * abw) / 1000
 
@@ -1068,13 +1144,16 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
         "abw": round(abw,2),
         "biomass": round(biomass,1),
        # "expected_biomass": round(expected_biomass,1),
-        "survival_pct": round(survival_pct,2),
-        "feed_pct": chart["feed_pct"],
-        "present_numbers": round(present_numbers,1)
-        
-        
+        "survival": round(survival_pct,2),
+        #"feed_pct": chart["feed_pct"],
+        "present_numbers": round(present_numbers,1),
+        #"excess_feed_flag": excess_feed_flag,
+        "possible_excess_feed_kg": round(excess_feed_qty,2) if excess_feed_flag else 0        
     }
-
+    
+    if present_numbers > pond["initial_stock"] * 1.05:
+        record["stocking_warning"] = "Check initial stocking entry"
+    
     # Weekly metrics
     if pond["sampling_log"]:
         last = pond["sampling_log"][-1]
@@ -1083,7 +1162,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
         if gap > 0:
             weight_gain = abw - last["abw"]
             biomass_gain = biomass - last["biomass"]
-            survival_change = survival_pct - last["survival_pct"]
+            survival_change = survival_pct - last["survival"]
 
             feed_used = sum(f["feed"] for f in pond["feed_log"])
 
@@ -1096,6 +1175,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
             })
 
     return record
+
 # ===============================================
 # FEED TRAY LOGIC
 # ===============================================
@@ -1136,7 +1216,198 @@ def feed_tray_logic(abw, last_feed, tray_left, consumed_time):
         "decision": decision
     }
 
+st.title("🦐 Shrimp Farm Weather & Feeding Logic")
 
+location = st.text_input("Enter Farm Location", "Chennai")
+
+from geopy.geocoders import Nominatim
+
+if location:
+
+    geolocator = Nominatim(user_agent="shrimp_app")
+    location_obj = geolocator.geocode(location)
+
+    if not location_obj:
+        st.error("Location not found (try nearby town) or check the spelling")
+        st.stop()
+
+    # ✅ Use Nominatim coordinates
+    lat = location_obj.latitude
+    lon = location_obj.longitude
+
+    st.success(f"Coordinates: {round(lat,4)}, {round(lon,4)}")
+
+    # ----------------------
+    # Weather Forecast (No Geocoding Here)
+    # ----------------------
+    weather_url = "https://api.open-meteo.com/v1/forecast"
+    weather_params = {
+        "latitude": lat,
+        "longitude": lon,
+        "current_weather": True,
+        "hourly": "temperature_2m,relativehumidity_2m,precipitation,windspeed_10m,pressure_msl",
+        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum",
+        "timezone": "auto"
+    }
+
+    weather = requests.get(weather_url, params=weather_params, timeout=10).json()
+    # ----------------------
+    # Extract Current Data
+    # ----------------------
+    current_temp = weather["current_weather"]["temperature"]
+    current_wind = weather["current_weather"]["windspeed"]
+
+    st.subheader("Current Conditions")
+    st.write("Temperature:", round(current_temp, 1), "°C")
+    st.write("Wind Speed:", round(current_wind, 1), "km/h")
+
+    # ----------------------
+    # Rain Forecast (Next 24 hrs)
+    # ----------------------
+    hourly_df = pd.DataFrame({
+        "time": weather["hourly"]["time"],
+        "temperature": weather["hourly"]["temperature_2m"],
+        "rain": weather["hourly"]["precipitation"]
+    })
+
+    next_24_rain = hourly_df["rain"][:24].sum()
+
+    # ----------------------
+    # Feeding Logic Engine (Current)
+    # ----------------------
+    st.subheader("Feeding Recommendation")
+
+    if current_temp > 34:
+        st.warning("🔥 High heat → Reduce feed by 15%")
+    elif current_temp < 26:
+        st.warning("❄ Low temperature → Reduce feed by 25%")
+    elif next_24_rain > 20:
+        st.warning("🌧 Heavy rain forecast → Reduce feed by 20% before rain")
+    elif current_wind > 20:
+        st.success("💨 Good wind mixing → Normal feeding")
+    else:
+        st.success("✅ Normal feeding schedule")
+
+    # ----------------------
+    # Daily Forecast
+    # ----------------------
+    daily_df = pd.DataFrame({
+        "Date": weather["daily"]["time"],
+        "Max_temp": weather["daily"]["temperature_2m_max"],
+        "Min_temp": weather["daily"]["temperature_2m_min"],
+        "Rain_total": weather["daily"]["precipitation_sum"]
+    })
+
+    # Format date
+    daily_df["Date"] = pd.to_datetime(daily_df["Date"]).dt.date
+
+    # Round decimals
+    daily_df = daily_df.round({
+        "Max_temp": 1,
+        "Min_temp": 1,
+        "Rain_total": 1
+    })
+
+    # ----------------------
+    # Feeding Logic (Daily)
+    # ----------------------
+    def feeding_decision(row):
+        if row["Max_temp"] > 34:
+            return "Increase Feed"
+        elif row["Min_temp"] < 24:
+            return "Reduce Feed"
+        elif row["Rain_total"] > 20:
+            return "Reduce Feed"
+        elif 28 <= row["Max_temp"] <= 32 and row["Rain_total"] == 0:
+            return "Increase Feed"
+        else:
+            return "Normal Feeding"
+
+    daily_df["Feeding_Decision"] = daily_df.apply(feeding_decision, axis=1)
+
+    # ----------------------
+    # Coloring Function
+    # ----------------------
+    def color_feed(val):
+        if val == "Reduce Feed":
+            return "background-color: #ffcccc"
+        elif val == "Increase Feed":
+            return "background-color: #ccffcc"
+        else:
+            return ""
+
+    # Style Table
+    styled_df = (
+        daily_df.style
+        .format({
+            "Max_temp": "{:.1f}",
+            "Min_temp": "{:.1f}",
+            "Rain_total": "{:.1f}"
+        })
+        .applymap(color_feed, subset=["Feeding_Decision"])
+    )
+
+    st.subheader("7-Day Forecast with Feeding Decision")
+    st.table(styled_df)
+# =====================================================
+# Lunar tide
+# =====================================================
+        
+show_lunar_tide = st.checkbox("Show Lunar & Tide Information")
+if show_lunar_tide:
+
+    st.subheader("🌕 Lunar Information")
+
+    phase_name = get_moon_name(moon_phase)
+    st.write("Today's Moon Phase:", phase_name)
+
+    if "Full Moon" in phase_name:
+        st.info("Molting activity may increase. Monitor feed trays carefully.")
+    elif "New Moon" in phase_name:
+        st.warning("Feeding response may reduce. Observe shrimp behavior.")
+
+# =====================================================
+# Tide
+# =====================================================       
+#show_tide = st.checkbox("Show High & Low Tide Information")
+#if show_tide:
+
+#    st.subheader("🌊 High & Low Tide Information")
+
+#    tide_url = "https://marine-api.open-meteo.com/v1/marine"
+
+#    tide_params = {
+#        "latitude": lat,
+#        "longitude": lon,
+#        "hourly": "sea_level_height",
+#        "timezone": "auto"
+#    }
+
+#    tide_response = requests.get(tide_url, params=tide_params)
+#    tide_data = tide_response.json()
+
+#    if "hourly" in tide_data:
+
+#        tide_df = pd.DataFrame({
+#            "time": tide_data["hourly"]["time"],
+#            "sea_level": tide_data["hourly"]["sea_level_height"]
+#        })
+
+#        # Convert time column to datetime
+#        tide_df["time"] = pd.to_datetime(tide_df["time"])
+
+#        # Take only next 24 hours
+#        next_24 = tide_df.head(24)
+
+#        # Detect High & Low
+#       high_tide = next_24.loc[next_24["sea_level"].idxmax()]
+#        low_tide = next_24.loc[next_24["sea_level"].idxmin()]
+
+#        st.success(f"🌊 High Tide: {high_tide['time']}  |  Level: {round(high_tide['sea_level'],2)} m")
+#       st.warning(f"🌊 Low Tide: {low_tide['time']}  |  Level: {round(low_tide['sea_level'],2)} m")
+#
+#    else:
+#        st.error("Tide data not available for this location.")
 # =====================================================
 # STREAMLIT UI
 # =====================================================
@@ -1191,29 +1462,61 @@ pond["stocking_date"] = st.date_input(
 volume = pond["area"] * pond["depth"]
 st.write(f"Pond Volume: {volume} m³")
 
-save_data(data)
+save_data()
 
 # Feed
 daily_feed = st.number_input("Feed Given Today (kg)", 0.0)
 if st.button("Save Feed"):
     pond["feed_log"].append({"date": str(date.today()), "feed": daily_feed})
-    save_data(data)
+    save_data()
 
 # Sampling
 count_input = st.number_input("Enter Count (count per kg)", min_value=1)
 sampling_date = st.date_input("Sampling Date", value=date.today())
 
+#if st.button("Run Sampling"):
+#    record = sampling_logic(count_input, daily_feed, pond, sampling_date)
+#    #report_df = pd.DataFrame(record.items(), columns=["Metric", "Value"])
+#    st.subheader("Sampling Report")
+#    report_df = pd.DataFrame(record.items(), columns=["Metric", "Value"])
+#    report_df = report_df.reset_index(drop=True)
+#    st.table(report_df)
+#    pond["sampling_log"].append(record)
+#    save_data(data)
+#    #st.json(record)
 if st.button("Run Sampling"):
+
     record = sampling_logic(count_input, daily_feed, pond, sampling_date)
-    pond["sampling_log"].append(record)
-    save_data(data)
-    st.json(record)
 
-# Feed Tray
-st.subheader("Feed Tray Calculation")
+    # Store temporarily (NOT saved yet)
+    st.session_state["pending_sampling"] = record
 
-if pond["sampling_log"]:
-    last_abw = pond["sampling_log"][-1]["abw"]
+    st.success("Sampling calculated. Review before saving.")
+
+    # Show preview table
+    preview_df = pd.DataFrame(record.items(), columns=["Metric", "Value"])
+
+    preview_df["Value"] = preview_df["Value"].apply(
+    lambda x: f"{x:.2f}" if isinstance(x, float) else x
+)
+
+    st.table(preview_df.set_index("Metric"))
+   
+if "pending_sampling" in st.session_state:
+
+    if st.button("💾 Save Sampling Record"):
+
+        pond["sampling_log"].append(st.session_state["pending_sampling"])
+
+        st.success("Sampling saved successfully!")
+
+        # Clear temporary data
+        del st.session_state["pending_sampling"]
+# Feed Tray 
+    st.subheader("Feed Tray Calculation")
+
+    if pond["sampling_log"]:
+        last_abw = pond["sampling_log"][-1]["abw"]
 
     last_feed = st.number_input("Last Feed Given (kg)", value=10.0)
     tray_left = st.number_input("Feed Left on Tray (g)", value=5.0)
@@ -1238,8 +1541,9 @@ if pond["sampling_log"]:
 
         # Save upgraded data permanently
         pond["sampling_log"] = df.to_dict("records")
-        save_data(data)
-
+        save_data()
+        
+    st.subheader("📈Growth Curve")
     fig, ax = plt.subplots()
     ax.plot(df["DOC"], df["abw"], marker="o")
     ax.set_xlabel("DOC")
@@ -1264,11 +1568,11 @@ if len(pond["sampling_log"]) >= 2:
         st.metric("Profit per m³", round(profit_m3,2))
 
 # Excel Export
-if st.button("Export Excel (Pond Wise)"):
-    df = pd.DataFrame(pond["sampling_log"])
-    file_name = f"{pond_name}_sampling_data.xlsx"
-    df.to_excel(file_name, index=False)
-    st.success("Excel file saved")
+#if st.button("Export Excel (Pond Wise)"):
+ #   df = pd.DataFrame(pond["sampling_log"])
+  #  file_name = f"{pond_name}_sampling_data.xlsx"
+   # df.to_excel(file_name, index=False)
+    #st.success("Excel file saved")
  # =====================================================
 # MORTALITY CURVE
 # =====================================================
@@ -1277,7 +1581,7 @@ st.subheader("📉 Mortality Curve")
 
 if pond["sampling_log"]:
     df = pd.DataFrame(pond["sampling_log"])
-    df["mortality_pct"] = 100 - df["survival_pct"]
+    df["mortality_pct"] = 100 - df["survival"]
 
     fig, ax = plt.subplots()
     ax.plot(df["DOC"], df["mortality_pct"], marker="o", color="red")
@@ -1289,23 +1593,23 @@ if pond["sampling_log"]:
 # FEED EFFICIENCY TREND
 # =====================================================
 
-st.subheader("📊 Feed Efficiency Trend (Weekly FCR)")
+#st.subheader("📊 Feed Efficiency Trend (Weekly FCR)")
 
-if pond["sampling_log"]:
-    df = pd.DataFrame(pond["sampling_log"])
+#if pond["sampling_log"]:
+ #   df = pd.DataFrame(pond["sampling_log"])
 
-    if "weekly_fcr" in df.columns:
-        df_fcr = df.dropna(subset=["weekly_fcr"])
+  #  if "weekly_fcr" in df.columns:
+   #     df_fcr = df.dropna(subset=["weekly_fcr"])
 
-        if not df_fcr.empty:
-            fig, ax = plt.subplots()
-            ax.plot(df_fcr["DOC"], df_fcr["weekly_fcr"], marker="o")
-            ax.set_xlabel("DOC")
-            ax.set_ylabel("Weekly FCR")
-            ax.set_title("Feed Efficiency Trend")
-            st.pyplot(fig)
-        else:
-            st.info("Weekly FCR data available from 2nd sampling onwards.")
+    #    if not df_fcr.empty:
+     #       fig, ax = plt.subplots()
+      #      ax.plot(df_fcr["DOC"], df_fcr["weekly_fcr"], marker="o")
+       #     ax.set_xlabel("DOC")
+        #    ax.set_ylabel("Weekly FCR")
+         #   ax.set_title("Feed Efficiency Trend")
+          #  st.pyplot(fig)
+       # else:
+        #    st.info("Weekly FCR data available from 2nd sampling onwards.")
 # =====================================================
 # HARVEST READINESS PREDICTOR
 # =====================================================
@@ -1317,7 +1621,7 @@ target_size = st.number_input("Target Harvest Size (g)", value=25)
 if pond["sampling_log"]:
     latest = pond["sampling_log"][-1]
     current_abw = latest["abw"]
-    survival = latest["survival_pct"]
+    survival = latest["survival"]
     biomass = latest["biomass"]
 
     if current_abw >= target_size:
@@ -1382,7 +1686,7 @@ if st.button("Generate Advanced PDF Report"):
 
         # Mortality graph
         mortality_img = "mortality_curve.png"
-        df["mortality_pct"] = 100 - df["survival_pct"]
+        df["mortality_pct"] = 100 - df["survival"]
 
         fig2, ax2 = plt.subplots()
         ax2.plot(df["DOC"], df["mortality_pct"], marker="o", color="red")
@@ -1428,7 +1732,15 @@ if st.button("Generate Advanced PDF Report"):
             profit_m3 = profit / volume if volume > 0 else 0
 
         biomass_per_m3 = latest["biomass"] / volume if volume > 0 else 0
-
+        # -------------------------
+         # Header Function (Logo Only)
+        # -------------------------
+    
+        def add_logo(canvas, doc):
+            logo_path = "pt_logo.png"
+            if os.path.exists(logo_path):
+                 canvas.drawImage(logo_path, 465,260, width=120, preserveAspectRatio=True, mask='auto')
+       
         # =====================================================
         # BUILD PDF
         # =====================================================
@@ -1441,12 +1753,26 @@ if st.button("Generate Advanced PDF Report"):
         elements.append(Paragraph("Pocket Technician Advanced Report", styles["Heading1"]))
         elements.append(Spacer(1, 0.3 * inch))
 
+        # =============================
+        # FARM HEADER (Inside PDF)
+        # =============================
+
+        header_style = styles["Heading1"]
+        normal_style = styles["Normal"]
+
+        elements.append(Paragraph(f"🦐 {farm_name}", header_style))
+        elements.append(Spacer(1, 0.2 * inch))
+
+        elements.append(Paragraph(f"Location: {location}", normal_style))
+        elements.append(Paragraph(f"Pond: {pond_name}", normal_style))
+        elements.append(Spacer(1, 0.3 * inch))
+        
         # -----------------------------------------------------
         # Sampling Table
         # -----------------------------------------------------
         elements.append(Paragraph("Sampling Summary", styles["Heading2"]))
         elements.append(Spacer(1, 0.2 * inch))
-
+        #Count= 1000/current_abw
         sampling_table = [
             ["Sampling Date", "DOC", "ABW", "Count", "Survival %", "Biomass"]
         ]
@@ -1456,8 +1782,8 @@ if st.button("Generate Advanced PDF Report"):
                 row["sampling_date"],
                 row["DOC"],
                 row["abw"],
-                row["count"],
-                row["survival_pct"],
+                row.get("count", "-"),
+                row["survival"],
                 row["biomass"]
             ])
 
@@ -1548,7 +1874,11 @@ if st.button("Generate Advanced PDF Report"):
             elements.append(Paragraph("Feed Efficiency Trend", styles["Heading2"]))
             elements.append(Image(fcr_img, width=5*inch, height=3*inch))
 
-        doc.build(elements)
+                # -------------------------
+        # Build PDF-used to build a pdf
+        # -------------------------
+        doc.build(elements, onFirstPage=add_logo, onLaterPages=add_logo)
+            
 
         with open(file_path, "rb") as f:
             st.download_button(
@@ -1557,3 +1887,184 @@ if st.button("Generate Advanced PDF Report"):
                 file_name="Advanced_Technician_Report.pdf",
                 mime="application/pdf"
             )
+            
+        
+st.subheader("📊 Farm Performance Comparison")
+
+if st.button("Generate Multi-Pond Farm Report"):
+
+    file_path = "Farm_Comparison_Report.pdf"
+    doc = SimpleDocTemplate(file_path, pagesize=A4)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    summary = []
+
+    # -------------------------
+    # Build Performance Summary
+    # -------------------------
+    for pond_name, pond in data["farms"][farm_name]["ponds"].items():
+
+        if not pond["sampling_log"]:
+            continue
+
+        df = pd.DataFrame(pond["sampling_log"])
+        latest = df.iloc[-1]
+
+        biomass = latest["biomass"]
+        survival = latest["survival"]
+        fcr = latest.get("weekly_FCR", 1.5)
+
+        score = (
+            survival * 0.4 +
+            (1 / fcr) * 100 * 0.3 +
+            biomass * 0.3 / 10
+        )
+
+        summary.append({
+            "Pond": pond_name,
+            "Biomass": biomass,
+            "Survival": survival,
+            "FCR": round(fcr, 2),
+            "Score": round(score, 2)
+        })
+
+    if not summary:
+        st.warning("No pond data available.")
+        st.stop()
+
+    summary_df = pd.DataFrame(summary)
+    summary_df = summary_df.sort_values("Score", ascending=False)
+
+    # -------------------------
+    # Add Grade
+    # -------------------------
+    def grade(score):
+        if score > 85:
+            return "A 🟢"
+        elif score > 70:
+            return "B 🟡"
+        else:
+            return "C 🔴"
+
+    summary_df["Grade"] = summary_df["Score"].apply(grade)
+
+    # -------------------------
+    # Ranking Table
+    # -------------------------
+    ranking_table = [["Rank", "Pond", "Biomass", "Survival", "FCR", "Score", "Grade"]]
+
+    for i, row in summary_df.reset_index(drop=True).iterrows():
+        ranking_table.append([
+            i + 1,
+            row["Pond"],
+            round(row["Biomass"], 2),
+            round(row["Survival"], 2),
+            row["FCR"],
+            row["Score"],
+            row["Grade"]
+        ])
+
+    # -------------------------
+    # Generate Charts
+    # -------------------------
+    # Growth Chart
+    plt.figure()
+    for pond_name, pond in data["farms"][farm_name]["ponds"].items():
+        if pond["sampling_log"]:
+            df = pd.DataFrame(pond["sampling_log"])
+            plt.plot(df["DOC"], df["biomass"], label=pond_name)
+
+    plt.xlabel("DOC")
+    plt.ylabel("Biomass (kg)")
+    plt.title("Pond Biomass Growth Comparison")
+    plt.legend()
+    plt.tight_layout()
+    growth_chart = "growth_multi.png"
+    plt.savefig(growth_chart)
+    plt.close()
+
+    # Survival Chart
+    plt.figure()
+    plt.bar(summary_df["Pond"], summary_df["Survival"])
+    plt.xticks(rotation=45)
+    plt.title("Survival Comparison")
+    plt.tight_layout()
+    survival_chart = "survival_multi.png"
+    plt.savefig(survival_chart)
+    plt.close()
+
+    # FCR Chart
+    plt.figure()
+    plt.bar(summary_df["Pond"], summary_df["FCR"])
+    plt.xticks(rotation=45)
+    plt.title("Feed Conversion Ratio Comparison")
+    plt.tight_layout()
+    fcr_chart = "fcr_multi.png"
+    plt.savefig(fcr_chart)
+    plt.close()
+
+    # -------------------------
+    # Header Function (Logo Only)
+    # -------------------------
+    def add_logo(canvas, doc):
+        logo_path = "pt_logo.png"
+        if os.path.exists(logo_path):
+            canvas.drawImage(logo_path, 465,260, width=120, preserveAspectRatio=True, mask='auto')
+
+    # -------------------------
+    # Build PDF Content
+    # -------------------------
+    farm_info = data["farms"][farm_name]
+    location = farm_info.get("location", "Not Provided")
+
+    elements.append(Paragraph(f"Location: {location}", styles["Normal"]))
+    elements.append(Paragraph("🦐 Farm Multi-Pond Performance Report", styles["Heading1"]))
+    elements.append(Spacer(1, 0.2 * inch))
+    elements.append(Paragraph(f"Farm: {farm_name}", styles["Normal"]))
+    #elements.append(Paragraph(f"Location: {data['farms'][farm_name]['location']}", styles["Normal"]))
+    elements.append(Paragraph(f"Date: {datetime.now().strftime('%d %B %Y')}", styles["Normal"]))
+    elements.append(PageBreak())
+
+    # Ranking
+    elements.append(Paragraph("🏆 Pond Ranking", styles["Heading2"]))
+    elements.append(Spacer(1, 0.2 * inch))
+    table = Table(ranking_table, repeatRows=1)
+    table.setStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+    ])
+    elements.append(table)
+    elements.append(PageBreak())
+
+    # Growth
+    elements.append(Paragraph("📈 Growth Comparison", styles["Heading2"]))
+    elements.append(Image(growth_chart, width=6 * inch, height=3.5 * inch))
+    elements.append(PageBreak())
+
+    # Survival
+    elements.append(Paragraph("🌱 Survival Comparison", styles["Heading2"]))
+    elements.append(Image(survival_chart, width=6 * inch, height=3.5 * inch))
+    elements.append(PageBreak())
+
+    # FCR
+    elements.append(Paragraph("📊 Feed Efficiency Comparison", styles["Heading2"]))
+    elements.append(Image(fcr_chart, width=6 * inch, height=3.5 * inch))
+
+    # -------------------------
+    # Build PDF
+    # -------------------------
+    doc.build(elements, onFirstPage=add_logo, onLaterPages=add_logo)
+
+    # -------------------------
+    # Download Button
+    # -------------------------
+    with open(file_path, "rb") as f:
+        st.download_button(
+            "📥 Download Farm Comparison Report",
+            f,
+            file_name="Farm_Comparison_Report.pdf",
+            mime="application/pdf"
+        )
+
+    st.success("Report generated successfully!")

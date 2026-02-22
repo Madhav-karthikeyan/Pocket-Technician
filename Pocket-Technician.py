@@ -1104,6 +1104,11 @@ def doc_calc(stocking_date, sampling_date):
 def nearest_count(count):
     return min(REFERENCE_FEED_CHART.keys(), key=lambda x: abs(x - count))
 
+
+def get_survival_value(record, default=0):
+    """Backward compatible survival lookup for mixed historical logs."""
+    return record.get("survival_pct", record.get("survival", default))
+
 # =====================================================
 # SAMPLING ENGINE (CORRECTED)
 # =====================================================
@@ -1144,6 +1149,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
         "abw": round(abw,2),
         "biomass": round(biomass,1),
        # "expected_biomass": round(expected_biomass,1),
+        "survival_pct": round(survival_pct,2),
         "survival": round(survival_pct,2),
         #"feed_pct": chart["feed_pct"],
         "present_numbers": round(present_numbers,1),
@@ -1162,7 +1168,7 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
         if gap > 0:
             weight_gain = abw - last["abw"]
             biomass_gain = biomass - last["biomass"]
-            survival_change = survival_pct - last["survival"]
+            survival_change = survival_pct - get_survival_value(last)
 
             feed_used = sum(f["feed"] for f in pond["feed_log"])
 
@@ -1581,6 +1587,8 @@ st.subheader("📉 Mortality Curve")
 
 if pond["sampling_log"]:
     df = pd.DataFrame(pond["sampling_log"])
+    if "survival_pct" not in df.columns and "survival" in df.columns:
+        df["survival_pct"] = df["survival"]
     df["mortality_pct"] = 100 - df["survival_pct"]
 
     fig, ax = plt.subplots()
@@ -1621,7 +1629,7 @@ target_size = st.number_input("Target Harvest Size (g)", value=25)
 if pond["sampling_log"]:
     latest = pond["sampling_log"][-1]
     current_abw = latest["abw"]
-    survival = latest["survival_pct"]
+    survival = get_survival_value(latest)
     biomass = latest["biomass"]
 
     if current_abw >= target_size:
@@ -1657,6 +1665,8 @@ if st.button("Generate Advanced PDF Report"):
     else:
 
         df = pd.DataFrame(pond["sampling_log"])
+        if "survival_pct" not in df.columns and "survival" in df.columns:
+            df["survival_pct"] = df["survival"]
 
         # Ensure DOC exists
         if "DOC" not in df.columns:
@@ -1783,7 +1793,7 @@ if st.button("Generate Advanced PDF Report"):
                 row["DOC"],
                 row["abw"],
                 row.get("count", "-"),
-                row["survival_pct"],
+                row.get("survival_pct", row.get("survival", 0)),
                 row["biomass"]
             ])
 
@@ -1911,7 +1921,7 @@ if st.button("Generate Multi-Pond Farm Report", key="multi_farm_report"):
         latest = df.iloc[-1]
 
         biomass = latest.get("biomass", 0)
-        survival = latest.get("survival_pct", 0)
+        survival = latest.get("survival_pct", latest.get("survival", 0))
         fcr = latest.get("weekly_FCR", 1.5)
 
         score = (

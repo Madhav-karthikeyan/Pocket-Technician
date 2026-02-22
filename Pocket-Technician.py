@@ -1175,6 +1175,22 @@ def ensure_survival_pct(df):
         df["survival_pct"] = 0
     return df
 
+
+def get_survival_value(record, default=0):
+    """Backward compatible survival lookup for mixed historical logs."""
+    return record.get("survival_pct", record.get("survival", default))
+
+
+def ensure_survival_pct(df):
+    """Normalize sampling DataFrame to always include survival_pct."""
+    if "survival_pct" in df.columns:
+        return df
+    if "survival" in df.columns:
+        df["survival_pct"] = df["survival"]
+    else:
+        df["survival_pct"] = 0
+    return df
+
 # =====================================================
 # SAMPLING ENGINE (CORRECTED)
 # =====================================================

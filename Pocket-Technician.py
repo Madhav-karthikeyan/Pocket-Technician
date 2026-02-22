@@ -1912,7 +1912,7 @@ if st.button("Generate Multi-Pond Farm Report"):
         latest = df.iloc[-1]
 
         biomass = latest["biomass"]
-        survival = latest["survival"]
+        survival = latest["survival_pct"]
         fcr = latest.get("weekly_FCR", 1.5)
 
         score = (
@@ -2068,6 +2068,7 @@ if st.button("Generate Multi-Pond Farm Report"):
         )
 
     st.success("Report generated successfully!")
+
 
 
 

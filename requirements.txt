@@ -4,4 +4,4 @@ matplotlib
 reportlab
 openpyxl
 requests
-
+astral

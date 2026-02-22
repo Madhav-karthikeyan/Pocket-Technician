@@ -3,29 +3,25 @@ import json, os
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import date, datetime
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table
+from reportlab.platypus import (
+    SimpleDocTemplate,
+    Paragraph,
+    Spacer,
+    Image,
+    Table,
+    PageBreak,
+)
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate
 from reportlab.platypus import Image as RLImage
 import openpyxl
 import requests
-import pandas as pd
-from datetime import datetime
 from astral import moon
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.units import inch
 from reportlab.lib.pagesizes import A4
-from datetime import datetime
-import matplotlib.pyplot as plt
-import pandas as pd
-from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table,
-        Image, PageBreak
-        )
-import os
+import tempfile
+import fcntl
 
 
 
@@ -46,6 +42,17 @@ def get_moon_name(phase):
 # CONFIG
 # =====================================================
 DATA_FILE = "farm_data.json"
+LOCK_FILE = f"{DATA_FILE}.lock"
+
+
+SUPPORT_NOTE = (
+    "Please refresh the page or contact the team at "
+    "madhavkarthikeyan2@gmail.com."
+)
+
+
+def show_support_note():
+    st.info(SUPPORT_NOTE)
 
 
 # Reference chart: Count per kg → %Feed → Feed per 100k
@@ -1029,22 +1036,72 @@ REFERENCE_FEED_CHART = {
 # ==============================
 # LOAD DATA (ONLY ONCE)
 # ==============================
+def _default_data():
+    return {"farms": {}}
+
+
+def _deep_merge_dict(base, updates):
+    """Merge nested dictionaries so concurrent users don't drop each other's keys."""
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge_dict(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def _load_data_file():
+    if not os.path.exists(DATA_FILE):
+        return _default_data()
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+            if isinstance(loaded, dict):
+                loaded.setdefault("farms", {})
+                return loaded
+    except json.JSONDecodeError:
+        backup = f"{DATA_FILE}.corrupt.{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        os.replace(DATA_FILE, backup)
+        st.error(f"Detected corrupted data file. Backup created: {backup}")
+        show_support_note()
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+        show_support_note()
+    return _default_data()
+
+
+def _atomic_write_json(payload):
+    dir_name = os.path.dirname(os.path.abspath(DATA_FILE)) or "."
+    fd, temp_path = tempfile.mkstemp(prefix="farm_data_", suffix=".tmp", dir=dir_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+            json.dump(payload, tmp_file, indent=4)
+            tmp_file.flush()
+            os.fsync(tmp_file.fileno())
+        os.replace(temp_path, DATA_FILE)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
 if "data" not in st.session_state:
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r") as f:
-            st.session_state.data = json.load(f)
-    else:
-        st.session_state.data = {"farms": {}}
+    st.session_state.data = _load_data_file()
 
 # ==============================
 # SAVE FUNCTION
 # ==============================
 def save_data():
     try:
-        with open(DATA_FILE, "w") as f:
-            json.dump(st.session_state.data, f, indent=4)
+        with open(LOCK_FILE, "w", encoding="utf-8") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            latest_disk_data = _load_data_file()
+            merged_data = _deep_merge_dict(latest_disk_data, st.session_state.data)
+            _atomic_write_json(merged_data)
+            st.session_state.data = merged_data
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
     except Exception as e:
         st.error(f"Error saving data: {e}")
+        show_support_note()
 
 # ==============================
 # SHORTCUT VARIABLE
@@ -1072,8 +1129,6 @@ for farm in data["farms"].values():
                 ).days + 1
 
 save_data()
-from datetime import datetime
-from astral import moon
 
 today = datetime.now().date()
 moon_phase = moon.phase(today)
@@ -1103,6 +1158,22 @@ def doc_calc(stocking_date, sampling_date):
 
 def nearest_count(count):
     return min(REFERENCE_FEED_CHART.keys(), key=lambda x: abs(x - count))
+
+
+def get_survival_value(record, default=0):
+    """Backward compatible survival lookup for mixed historical logs."""
+    return record.get("survival_pct", record.get("survival", default))
+
+
+def ensure_survival_pct(df):
+    """Normalize sampling DataFrame to always include survival_pct."""
+    if "survival_pct" in df.columns:
+        return df
+    if "survival" in df.columns:
+        df["survival_pct"] = df["survival"]
+    else:
+        df["survival_pct"] = 0
+    return df
 
 
 def get_survival_value(record, default=0):
@@ -1241,7 +1312,12 @@ from geopy.geocoders import Nominatim
 if location:
 
     geolocator = Nominatim(user_agent="shrimp_app")
-    location_obj = geolocator.geocode(location)
+    try:
+        location_obj = geolocator.geocode(location, timeout=8)
+    except Exception as e:
+        st.error(f"Unable to fetch location: {e}")
+        show_support_note()
+        st.stop()
 
     if not location_obj:
         st.error("Location not found (try nearby town) or check the spelling")
@@ -1266,10 +1342,30 @@ if location:
         "timezone": "auto"
     }
 
-    weather = requests.get(weather_url, params=weather_params, timeout=10).json()
+    try:
+        weather_response = requests.get(weather_url, params=weather_params, timeout=8)
+        weather_response.raise_for_status()
+        weather = weather_response.json()
+    except requests.exceptions.Timeout:
+        st.error("Weather service timed out. Please try again.")
+        show_support_note()
+        st.stop()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Weather service error: {e}")
+        show_support_note()
+        st.stop()
+    except ValueError:
+        st.error("Weather service returned an invalid response.")
+        show_support_note()
+        st.stop()
     # ----------------------
     # Extract Current Data
     # ----------------------
+    if "current_weather" not in weather or "hourly" not in weather or "daily" not in weather:
+        st.error("Weather data is incomplete right now.")
+        show_support_note()
+        st.stop()
+
     current_temp = weather["current_weather"]["temperature"]
     current_wind = weather["current_weather"]["windspeed"]
 

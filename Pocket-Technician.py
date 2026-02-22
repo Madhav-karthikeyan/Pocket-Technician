@@ -1891,28 +1891,27 @@ if st.button("Generate Advanced PDF Report"):
         
 st.subheader("📊 Farm Performance Comparison")
 
-if st.button("Generate Multi-Pond Farm Report"):
-
-    file_path = "Farm_Comparison_Report.pdf"
-    doc = SimpleDocTemplate(file_path, pagesize=A4)
-    elements = []
-    styles = getSampleStyleSheet()
+if st.button("Generate Multi-Pond Farm Report", key="multi_farm_report"):
 
     summary = []
 
-    # -------------------------
+    # -------------------------------------------------
     # Build Performance Summary
-    # -------------------------
+    # -------------------------------------------------
     for pond_name, pond in data["farms"][farm_name]["ponds"].items():
 
-        if not pond["sampling_log"]:
+        if not pond.get("sampling_log"):
             continue
 
         df = pd.DataFrame(pond["sampling_log"])
+
+        if df.empty:
+            continue
+
         latest = df.iloc[-1]
 
-        biomass = latest["biomass"]
-        survival = latest["survival_pct"]
+        biomass = latest.get("biomass", 0)
+        survival = latest.get("survival_pct", 0)
         fcr = latest.get("weekly_FCR", 1.5)
 
         score = (
@@ -1936,9 +1935,9 @@ if st.button("Generate Multi-Pond Farm Report"):
     summary_df = pd.DataFrame(summary)
     summary_df = summary_df.sort_values("Score", ascending=False)
 
-    # -------------------------
+    # -------------------------------------------------
     # Add Grade
-    # -------------------------
+    # -------------------------------------------------
     def grade(score):
         if score > 85:
             return "A 🟢"
@@ -1949,9 +1948,9 @@ if st.button("Generate Multi-Pond Farm Report"):
 
     summary_df["Grade"] = summary_df["Score"].apply(grade)
 
-    # -------------------------
+    # -------------------------------------------------
     # Ranking Table
-    # -------------------------
+    # -------------------------------------------------
     ranking_table = [["Rank", "Pond", "Biomass", "Survival", "FCR", "Score", "Grade"]]
 
     for i, row in summary_df.reset_index(drop=True).iterrows():
@@ -1965,53 +1964,47 @@ if st.button("Generate Multi-Pond Farm Report"):
             row["Grade"]
         ])
 
-    # -------------------------
+    # -------------------------------------------------
     # Generate Charts
-    # -------------------------
+    # -------------------------------------------------
+
     # Growth Chart
     plt.figure()
-    
-for pond_name, pond in data["farms"][farm_name]["ponds"].items():
 
-    if not pond.get("sampling_log"):
-        continue
+    for pond_name, pond in data["farms"][farm_name]["ponds"].items():
 
-    df = pd.DataFrame(pond["sampling_log"])
-
-    # Skip if biomass missing
-    if "biomass" not in df.columns:
-        continue
-
-    # If DOC missing, try to create it
-    if "DOC" not in df.columns:
-
-        # Try using sampling_date or date
-        if "sampling_date" in df.columns:
-            date_col = "sampling_date"
-        elif "date" in df.columns:
-            date_col = "date"
-        else:
-            continue  # Can't compute DOC
-
-        if "stocking_date" in pond:
-            stocking_date = datetime.fromisoformat(
-                pond["stocking_date"]
-            ).date()
-
-            df["DOC"] = df[date_col].apply(
-                lambda x: (
-                    datetime.fromisoformat(str(x)).date()
-                    - stocking_date
-                ).days + 1
-            )
-        else:
+        if not pond.get("sampling_log"):
             continue
 
-    # Now safe to plot
-    plt.plot(df["DOC"], df["biomass"], label=pond_name)
+        df = pd.DataFrame(pond["sampling_log"])
 
-    # Now safe to plot
-    plt.plot(df["DOC"], df["biomass"], label=pond_name)
+        if "biomass" not in df.columns:
+            continue
+
+        # Create DOC if missing
+        if "DOC" not in df.columns:
+            if "sampling_date" in df.columns:
+                date_col = "sampling_date"
+            elif "date" in df.columns:
+                date_col = "date"
+            else:
+                continue
+
+            if pond.get("stocking_date"):
+                stocking_date = datetime.fromisoformat(
+                    pond["stocking_date"]
+                ).date()
+
+                df["DOC"] = df[date_col].apply(
+                    lambda x: (
+                        datetime.fromisoformat(str(x)).date()
+                        - stocking_date
+                    ).days + 1
+                )
+            else:
+                continue
+
+        plt.plot(df["DOC"], df["biomass"], label=pond_name)
 
     plt.xlabel("DOC")
     plt.ylabel("Biomass (kg)")
@@ -2042,29 +2035,40 @@ for pond_name, pond in data["farms"][farm_name]["ponds"].items():
     plt.savefig(fcr_chart)
     plt.close()
 
-    # -------------------------
-    # Header Function (Logo Only)
-    # -------------------------
+    # -------------------------------------------------
+    # PDF Section
+    # -------------------------------------------------
+
+    file_path = "Farm_Comparison_Report.pdf"
+    doc = SimpleDocTemplate(file_path, pagesize=A4)
+    elements = []
+    styles = getSampleStyleSheet()
+
+    # Logo (Top Right)
     def add_logo(canvas, doc):
         logo_path = "pt_logo.png"
         if os.path.exists(logo_path):
-            canvas.drawImage(logo_path, 465,260, width=120, preserveAspectRatio=True, mask='auto')
+            page_width, page_height = A4
+            canvas.drawImage(
+                logo_path,
+                page_width - 160,
+                page_height - 80,
+                width=120,
+                preserveAspectRatio=True,
+                mask='auto'
+            )
 
-    # -------------------------
-    # Build PDF Content
-    # -------------------------
     farm_info = data["farms"][farm_name]
     location = farm_info.get("location", "Not Provided")
 
-    elements.append(Paragraph(f"Location: {location}", styles["Normal"]))
     elements.append(Paragraph("🦐 Farm Multi-Pond Performance Report", styles["Heading1"]))
     elements.append(Spacer(1, 0.2 * inch))
     elements.append(Paragraph(f"Farm: {farm_name}", styles["Normal"]))
-    #elements.append(Paragraph(f"Location: {data['farms'][farm_name]['location']}", styles["Normal"]))
+    elements.append(Paragraph(f"Location: {location}", styles["Normal"]))
     elements.append(Paragraph(f"Date: {datetime.now().strftime('%d %B %Y')}", styles["Normal"]))
     elements.append(PageBreak())
 
-    # Ranking
+    # Ranking Table
     elements.append(Paragraph("🏆 Pond Ranking", styles["Heading2"]))
     elements.append(Spacer(1, 0.2 * inch))
     table = Table(ranking_table, repeatRows=1)
@@ -2089,14 +2093,9 @@ for pond_name, pond in data["farms"][farm_name]["ponds"].items():
     elements.append(Paragraph("📊 Feed Efficiency Comparison", styles["Heading2"]))
     elements.append(Image(fcr_chart, width=6 * inch, height=3.5 * inch))
 
-    # -------------------------
-    # Build PDF
-    # -------------------------
     doc.build(elements, onFirstPage=add_logo, onLaterPages=add_logo)
 
-    # -------------------------
     # Download Button
-    # -------------------------
     with open(file_path, "rb") as f:
         st.download_button(
             "📥 Download Farm Comparison Report",

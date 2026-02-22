@@ -1971,9 +1971,43 @@ if st.button("Generate Multi-Pond Farm Report"):
     # Growth Chart
     plt.figure()
     for pond_name, pond in data["farms"][farm_name]["ponds"].items():
-        if pond["sampling_log"]:
-            df = pd.DataFrame(pond["sampling_log"])
-            plt.plot(df["DOC"], df["biomass"], label=pond_name)
+
+    if not pond.get("sampling_log"):
+        continue
+
+    df = pd.DataFrame(pond["sampling_log"])
+
+    # Skip if biomass missing
+    if "biomass" not in df.columns:
+        continue
+
+    # If DOC missing, try to create it
+    if "DOC" not in df.columns:
+
+        # Try using sampling_date or date
+        if "sampling_date" in df.columns:
+            date_col = "sampling_date"
+        elif "date" in df.columns:
+            date_col = "date"
+        else:
+            continue  # Can't compute DOC
+
+        if "stocking_date" in pond:
+            stocking_date = datetime.fromisoformat(
+                pond["stocking_date"]
+            ).date()
+
+            df["DOC"] = df[date_col].apply(
+                lambda x: (
+                    datetime.fromisoformat(str(x)).date()
+                    - stocking_date
+                ).days + 1
+            )
+        else:
+            continue
+
+    # Now safe to plot
+    plt.plot(df["DOC"], df["biomass"], label=pond_name)
 
     plt.xlabel("DOC")
     plt.ylabel("Biomass (kg)")
@@ -2068,6 +2102,7 @@ if st.button("Generate Multi-Pond Farm Report"):
         )
 
     st.success("Report generated successfully!")
+
 
 
 

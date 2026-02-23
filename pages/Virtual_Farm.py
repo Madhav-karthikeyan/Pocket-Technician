@@ -223,7 +223,7 @@ def render_virtual_farm(standalone: bool = True):
     if standalone:
         st.set_page_config("Virtual Farm", layout="wide")
 
-    st.title("Virtual Farm")
+    st.title(" Virtual Farm")
     st.caption("Project culture growth with a simple DEB-style simulation using what-if controls.")
 
     data = _load_data()
@@ -242,7 +242,9 @@ def render_virtual_farm(standalone: bool = True):
         return
 
     st.subheader("Initial Inputs")
-    st.caption("Tune pond-level assumptions. Current Biomass is auto-derived from ABW × Pond Area × Stocking Density.")
+    st.caption(
+        "Tune pond-level assumptions using vertical inputs. Current Biomass is auto-derived from ABW × Pond Area × Stocking Density."
+    )
 
     input_rows = []
     for pond_name, pond in sorted(ponds.items()):
@@ -284,39 +286,102 @@ def render_virtual_farm(standalone: bool = True):
             }
         )
 
-    input_df = pd.DataFrame(input_rows)
-    input_df["Stocking Date"] = pd.to_datetime(input_df["Stocking Date"], errors="coerce").dt.date
-    input_df["Sampling Date"] = pd.to_datetime(input_df["Sampling Date"], errors="coerce").dt.date
+    editable_rows = []
+    for row in input_rows:
+        pond_key = str(row["Pond"]).replace(" ", "_").lower()
+        st.markdown(f"#### Pond: {row['Pond']}")
+        with st.container(border=True):
+            area_m2 = st.number_input(
+                "Pond Area (m²)",
+                min_value=0.01,
+                value=float(row["Pond Area (m²)"]),
+                step=0.01,
+                format="%.2f",
+                key=f"vf_area_{pond_key}",
+            )
+            abw_g = st.number_input(
+                "Avg Body Weight (g)",
+                min_value=0.0,
+                value=float(row["Avg Body Weight (g)"]),
+                step=0.01,
+                format="%.2f",
+                key=f"vf_abw_{pond_key}",
+            )
+            density = st.number_input(
+                "Stocking Density (#/m²)",
+                min_value=0.0,
+                value=float(row["Stocking Density (#/m²)"]),
+                step=0.1,
+                format="%.2f",
+                key=f"vf_density_{pond_key}",
+            )
+            stocking_date = st.date_input(
+                "Stocking Date",
+                value=pd.to_datetime(row["Stocking Date"], errors="coerce").date(),
+                key=f"vf_stock_date_{pond_key}",
+            )
+            current_doc = st.number_input(
+                "Current DOC",
+                min_value=1,
+                value=int(_safe_float(row["Current DOC"], 1)),
+                step=1,
+                key=f"vf_doc_{pond_key}",
+            )
+            accumulated_feed = st.number_input(
+                "Accumulated Feed (kg)",
+                min_value=0.0,
+                value=float(row["Accumulated Feed (kg)"]),
+                step=0.1,
+                format="%.2f",
+                key=f"vf_feed_{pond_key}",
+            )
+            survival_pct = st.number_input(
+                "Current Survival (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(row["Current Survival (%)"]),
+                step=0.1,
+                format="%.2f",
+                key=f"vf_survival_{pond_key}",
+            )
+            feed_price = st.number_input(
+                "Feed Price (₹/kg)",
+                min_value=0.0,
+                value=float(row["Feed Price (₹/kg)"]),
+                step=0.1,
+                format="%.2f",
+                key=f"vf_feed_price_{pond_key}",
+            )
+            shrimp_price = st.number_input(
+                "Shrimp Price (₹/kg)",
+                min_value=0.0,
+                value=float(row["Shrimp Price (₹/kg)"]),
+                step=0.1,
+                format="%.2f",
+                key=f"vf_shrimp_price_{pond_key}",
+            )
 
-    editable_df = st.data_editor(
-        input_df,
-        use_container_width=True,
-        hide_index=True,
-        disabled=["Pond", "Current Biomass (kg)"],
-        column_config={
-            "Pond Area (m²)": st.column_config.NumberColumn("Pond Area (m²)", min_value=0.01, step=0.01, format="%.2f"),
-            "Avg Body Weight (g)": st.column_config.NumberColumn("Avg Body Weight (g)", min_value=0.0, step=0.01, format="%.2f"),
-            "Stocking Density (#/m²)": st.column_config.NumberColumn(
-                "Stocking Density (#/m²)", min_value=0.0, step=0.1, format="%.2f"
-            ),
-            "Stocking Date": st.column_config.DateColumn("Stocking Date", format="YYYY-MM-DD"),
-            "Sampling Date": st.column_config.DateColumn("Sampling Date", format="YYYY-MM-DD"),
-            "Feed Price (₹/kg)": st.column_config.NumberColumn("Feed Price (₹/kg)", min_value=0.0, step=0.1, format="%.2f"),
-            "Shrimp Price (₹/kg)": st.column_config.NumberColumn("Shrimp Price (₹/kg)", min_value=0.0, step=0.1, format="%.2f"),
-            "Current DOC": st.column_config.NumberColumn("Current DOC", min_value=1, step=1, format="%d"),
-            "Current Biomass (kg)": st.column_config.NumberColumn(
-                "Current Biomass (kg)", min_value=0.0, step=0.1, format="%.2f"
-            ),
-            "Accumulated Feed (kg)": st.column_config.NumberColumn(
-                "Accumulated Feed (kg)", min_value=0.0, step=0.1, format="%.2f"
-            ),
-            "Current Survival (%)": st.column_config.NumberColumn(
-                "Current Survival (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.2f"
-            ),
-        },
-        key="vf_editor",
+        auto_biomass = (area_m2 * density * abw_g) / 1000
+        editable_rows.append(
+            {
+                "Pond": row["Pond"],
+                "Pond Area (m²)": area_m2,
+                "Avg Body Weight (g)": abw_g,
+                "Stocking Density (#/m²)": density,
+                "Stocking Date": stocking_date,
+                "Sampling Date": row["Sampling Date"],
+                "Feed Price (₹/kg)": feed_price,
+                "Shrimp Price (₹/kg)": shrimp_price,
+                "Current DOC": current_doc,
+                "Current Biomass (kg)": auto_biomass,
+                "Accumulated Feed (kg)": accumulated_feed,
+                "Current Survival (%)": survival_pct,
+            }
+        )
+
+    st.caption(
+        "Sampling Date and Current Biomass are hidden from input view. Biomass is automatically calculated from ABW × Pond Area × Stocking Density."
     )
-    st.caption("Update any pond values in this table (including ABW, Sampling Date, feed price, and shrimp price), then click **🚀 Project** to simulate the selected scenario.")
 
     st.subheader("What-if Scenario Controls")
     c1, c2, c3, c4 = st.columns(4)
@@ -338,7 +403,6 @@ def render_virtual_farm(standalone: bool = True):
         }
 
         all_runs = []
-        editable_rows = editable_df.to_dict(orient="records")
         for row in editable_rows:
             area_m2 = _safe_float(row.get("Pond Area (m²)"), 0.0)
             density = _safe_float(row.get("Stocking Density (#/m²)"), 0.0)

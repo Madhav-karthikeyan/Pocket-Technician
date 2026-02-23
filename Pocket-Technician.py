@@ -1534,25 +1534,6 @@ if st.session_state["mode"] == "Virtual Farm":
     render_virtual_farm(standalone=False)
     st.stop()
 
-st.sidebar.markdown(
-    """
-    <div style='background: linear-gradient(135deg, #eef9ff 0%, #e8fff1 100%);                border: 1px solid #cfe9d8; border-radius: 14px; padding: 10px; margin-top: 8px;'>
-      <svg width='100%' viewBox='0 0 360 140' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='Shrimp farm doodle'>
-        <rect x='2' y='2' width='356' height='136' rx='12' fill='#f8fffb' stroke='#d2eede'/>
-        <path d='M20 88 Q70 58, 120 88 T220 88 T320 88' stroke='#66b9ff' stroke-width='4' fill='none'/>
-        <circle cx='56' cy='48' r='16' fill='#ffd98e'/>
-        <path d='M140 92 q22 -20 48 -6 q18 12 36 0' stroke='#ff8b8b' stroke-width='4' fill='none'/>
-        <path d='M144 92 q7 12 21 12' stroke='#ff8b8b' stroke-width='3' fill='none'/>
-        <circle cx='180' cy='86' r='2.8' fill='#333'/>
-        <rect x='246' y='48' width='54' height='34' rx='6' fill='#b7d8ff' stroke='#7aa9dd'/>
-        <line x1='273' y1='82' x2='273' y2='104' stroke='#7aa9dd' stroke-width='4'/>
-        <text x='20' y='125' font-size='13' fill='#2f6f5f' font-family='sans-serif'>Virtual Farm • Growth • Feed • Profit</text>
-      </svg>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
 pond = None
 
 if farm_name and pond_name:

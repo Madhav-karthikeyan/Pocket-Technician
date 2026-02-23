@@ -1518,7 +1518,7 @@ pond_name = st.sidebar.text_input("Pond Name")
 location = st.sidebar.text_input("Location", "")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Select Mode")
+st.sidebar.subheader(" Select Mode")
 if "mode" not in st.session_state:
     st.session_state["mode"] = "Technician"
 
@@ -2240,7 +2240,6 @@ if st.button("Generate Multi-Pond Farm Report", key="multi_farm_report"):
 
     # Download Button
     with open(file_path, "rb") as f:
-        
         st.download_button(
             "📥 Download Farm Comparison Report",
             f,

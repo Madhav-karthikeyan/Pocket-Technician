@@ -36,6 +36,30 @@ def _load_data():
     return _default_data()
 
 
+def _save_data(payload: dict):
+    os.makedirs(BASE_DIR, exist_ok=True)
+
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                payload TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        now = datetime.now().isoformat(timespec="seconds")
+        conn.execute(
+            "INSERT OR REPLACE INTO app_state (id, payload, updated_at) VALUES (1, ?, ?)",
+            (json.dumps(payload), now),
+        )
+        conn.commit()
+
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
 def _calc_doc(stocking_date_str: str):
     try:
         return (date.today() - datetime.fromisoformat(stocking_date_str).date()).days + 1
@@ -174,7 +198,35 @@ def render_virtual_farm(standalone: bool = True):
         )
 
     input_df = pd.DataFrame(input_rows)
-    st.dataframe(input_df, use_container_width=True)
+    input_df["Stocking Date"] = pd.to_datetime(input_df["Stocking Date"], errors="coerce").dt.date
+
+    editable_df = st.data_editor(
+        input_df,
+        use_container_width=True,
+        hide_index=True,
+        disabled=["Pond"],
+        column_config={
+            "Pond Area (m²)": st.column_config.NumberColumn("Pond Area (m²)", min_value=0.01, step=0.01, format="%.2f"),
+            "Avg Depth (m)": st.column_config.NumberColumn("Avg Depth (m)", min_value=0.01, step=0.01, format="%.2f"),
+            "Pond Volume (m³)": st.column_config.NumberColumn("Pond Volume (m³)", min_value=0.01, step=0.01, format="%.2f"),
+            "Stocking Density (#/m²)": st.column_config.NumberColumn(
+                "Stocking Density (#/m²)", min_value=0.0, step=0.1, format="%.2f"
+            ),
+            "Stocking Date": st.column_config.DateColumn("Stocking Date", format="YYYY-MM-DD"),
+            "Current DOC": st.column_config.NumberColumn("Current DOC", min_value=1, step=1, format="%d"),
+            "Current Biomass (kg)": st.column_config.NumberColumn(
+                "Current Biomass (kg)", min_value=0.0, step=0.1, format="%.2f"
+            ),
+            "Accumulated Feed (kg)": st.column_config.NumberColumn(
+                "Accumulated Feed (kg)", min_value=0.0, step=0.1, format="%.2f"
+            ),
+            "Current Survival (%)": st.column_config.NumberColumn(
+                "Current Survival (%)", min_value=0.0, max_value=100.0, step=0.1, format="%.2f"
+            ),
+        },
+        key="vf_editor",
+    )
+    st.caption("Update any pond values in this table, then click **🚀 Project** to simulate the selected scenario.")
 
     st.subheader("What-if Scenario Controls")
     c1, c2, c3, c4 = st.columns(4)
@@ -196,7 +248,8 @@ def render_virtual_farm(standalone: bool = True):
         }
 
         all_runs = []
-        for row in input_rows:
+        editable_rows = editable_df.to_dict(orient="records")
+        for row in editable_rows:
             config = {
                 "pond_name": row["Pond"],
                 "doc": row["Current DOC"],
@@ -207,6 +260,8 @@ def render_virtual_farm(standalone: bool = True):
             all_runs.append(_simulate_deb(config, scenario))
 
         st.session_state["virtual_projection_df"] = pd.concat(all_runs, ignore_index=True)
+        st.session_state["virtual_projection_scenario"] = scenario
+        st.session_state["virtual_projection_inputs"] = editable_rows
 
     if "virtual_projection_df" not in st.session_state:
         st.info("Set your what-if controls and click **Project** to run DEB-style projection.")
@@ -226,6 +281,34 @@ def render_virtual_farm(standalone: bool = True):
         }
     )
     st.dataframe(summary.round(2), use_container_width=True)
+
+    report_payload = {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "farm": farm_name,
+        "scenario": st.session_state.get("virtual_projection_scenario", {}),
+        "inputs": st.session_state.get("virtual_projection_inputs", []),
+        "summary": summary.round(2).to_dict(orient="records"),
+        "projection": projection_df.round(4).to_dict(orient="records"),
+    }
+    report_payload = json.loads(json.dumps(report_payload, default=str))
+
+    report_col1, report_col2 = st.columns([1, 1])
+    with report_col1:
+        if st.button("💾 Save Advanced Projection Report", type="secondary", key="save_vf_report"):
+            reports = farm.setdefault("virtual_projection_reports", [])
+            reports.append(report_payload)
+            data.setdefault("farms", {})[farm_name] = farm
+            _save_data(data)
+            st.success("Advanced projection report saved to farm records.")
+
+    with report_col2:
+        st.download_button(
+            "⬇️ Download Advanced Projection Report (JSON)",
+            data=json.dumps(report_payload, ensure_ascii=False, indent=2),
+            file_name=f"virtual_farm_report_{farm_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+            use_container_width=True,
+        )
 
     st.subheader("Essential Projection Graphs (Line Charts)")
 

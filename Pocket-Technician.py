@@ -1518,14 +1518,14 @@ pond_name = st.sidebar.text_input("Pond Name")
 location = st.sidebar.text_input("Location", "")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("🧭 Select Mode")
+st.sidebar.subheader("Select Mode")
 if "mode" not in st.session_state:
     st.session_state["mode"] = "Technician"
 
 btn_col1, btn_col2 = st.sidebar.columns(2)
-if btn_col1.button("🛠 Technician", use_container_width=True):
+if btn_col1.button(" Technician", use_container_width=True):
     st.session_state["mode"] = "Technician"
-if btn_col2.button("🌐 Virtual Farm", use_container_width=True):
+if btn_col2.button("Virtual Farm", use_container_width=True):
     st.session_state["mode"] = "Virtual Farm"
 
 st.sidebar.caption(f"Current mode: **{st.session_state['mode']}**")

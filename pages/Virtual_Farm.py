@@ -94,8 +94,10 @@ def _simulate_deb(config: dict, scenario: dict) -> pd.DataFrame:
     total_feed_used = float(config["accum_feed_kg"])
     survival_pct = float(config["survival_pct"])
 
-    feed_cost_per_kg = 45 * (1 + scenario["feed_cost_adj"] / 100)
-    sale_price_per_kg = 260 * (1 + scenario["sale_price_adj"] / 100)
+    base_feed_price = _safe_float(config.get("feed_price_per_kg", 45.0), 45.0)
+    base_shrimp_price = _safe_float(config.get("shrimp_price_per_kg", 260.0), 260.0)
+    feed_cost_per_kg = base_feed_price * (1 + scenario["feed_cost_adj"] / 100)
+    sale_price_per_kg = base_shrimp_price * (1 + scenario["sale_price_adj"] / 100)
 
     assim_eff = 0.68
     k_maint = 0.0065
@@ -240,7 +242,7 @@ def render_virtual_farm(standalone: bool = True):
         return
 
     st.subheader("Initial Inputs")
-    st.caption("You can keep decimal/fraction values for pond dimensions and tune pond-level simulation assumptions.")
+    st.caption("Tune pond-level assumptions. Current Biomass is auto-derived from ABW × Pond Area × Stocking Density.")
 
     input_rows = []
     for pond_name, pond in sorted(ponds.items()):
@@ -250,30 +252,31 @@ def render_virtual_farm(standalone: bool = True):
             latest = sampling_log[-1]
 
         area = _safe_float(pond.get("area", 0.0))
-        depth = _safe_float(pond.get("depth", 0.0))
         initial_stock = _safe_float(pond.get("initial_stock", 0.0))
         stocking_density = (initial_stock / area) if area > 0 else 0.0
         stocking_date = pond.get("stocking_date", str(date.today()))
         latest_sampling_date = latest.get("date", str(date.today()))
         doc = _days_between(stocking_date, latest_sampling_date, fallback=_calc_doc(stocking_date))
 
-        current_biomass = _safe_float(latest.get("biomass", 0.0))
-        if current_biomass <= 0:
-            current_biomass = initial_stock * 0.002
+        latest_biomass = _safe_float(latest.get("biomass", 0.0))
+        if latest_biomass <= 0:
+            latest_biomass = initial_stock * 0.002
 
         total_feed = sum(_safe_float(item.get("feed", 0.0)) for item in pond.get("feed_log", []))
         survival = _safe_float(latest.get("survival_pct", latest.get("survival", 80.0)), 80.0)
-        abw_g = (current_biomass * 1000 / initial_stock) if initial_stock > 0 else 0.0
+        abw_g = (latest_biomass * 1000 / initial_stock) if initial_stock > 0 else 0.0
+        current_biomass = (area * stocking_density * abw_g) / 1000 if abw_g > 0 else 0.0
 
         input_rows.append(
             {
                 "Pond": pond_name,
                 "Pond Area (m²)": round(area, 2),
-                "Avg Depth (m)": round(depth, 2),
                 "Avg Body Weight (g)": round(abw_g, 2),
                 "Stocking Density (#/m²)": round(stocking_density, 2),
                 "Stocking Date": stocking_date,
                 "Sampling Date": latest_sampling_date,
+                "Feed Price (₹/kg)": 45.0,
+                "Shrimp Price (₹/kg)": 260.0,
                 "Current DOC": doc,
                 "Current Biomass (kg)": round(current_biomass, 2),
                 "Accumulated Feed (kg)": round(total_feed, 2),
@@ -289,16 +292,17 @@ def render_virtual_farm(standalone: bool = True):
         input_df,
         use_container_width=True,
         hide_index=True,
-        disabled=["Pond"],
+        disabled=["Pond", "Current Biomass (kg)"],
         column_config={
             "Pond Area (m²)": st.column_config.NumberColumn("Pond Area (m²)", min_value=0.01, step=0.01, format="%.2f"),
-            "Avg Depth (m)": st.column_config.NumberColumn("Avg Depth (m)", min_value=0.01, step=0.01, format="%.2f"),
             "Avg Body Weight (g)": st.column_config.NumberColumn("Avg Body Weight (g)", min_value=0.0, step=0.01, format="%.2f"),
             "Stocking Density (#/m²)": st.column_config.NumberColumn(
                 "Stocking Density (#/m²)", min_value=0.0, step=0.1, format="%.2f"
             ),
             "Stocking Date": st.column_config.DateColumn("Stocking Date", format="YYYY-MM-DD"),
             "Sampling Date": st.column_config.DateColumn("Sampling Date", format="YYYY-MM-DD"),
+            "Feed Price (₹/kg)": st.column_config.NumberColumn("Feed Price (₹/kg)", min_value=0.0, step=0.1, format="%.2f"),
+            "Shrimp Price (₹/kg)": st.column_config.NumberColumn("Shrimp Price (₹/kg)", min_value=0.0, step=0.1, format="%.2f"),
             "Current DOC": st.column_config.NumberColumn("Current DOC", min_value=1, step=1, format="%d"),
             "Current Biomass (kg)": st.column_config.NumberColumn(
                 "Current Biomass (kg)", min_value=0.0, step=0.1, format="%.2f"
@@ -312,7 +316,7 @@ def render_virtual_farm(standalone: bool = True):
         },
         key="vf_editor",
     )
-    st.caption("Update any pond values in this table (including ABW and Sampling Date), then click **🚀 Project** to simulate the selected scenario.")
+    st.caption("Update any pond values in this table (including ABW, Sampling Date, feed price, and shrimp price), then click **🚀 Project** to simulate the selected scenario.")
 
     st.subheader("What-if Scenario Controls")
     c1, c2, c3, c4 = st.columns(4)
@@ -339,7 +343,7 @@ def render_virtual_farm(standalone: bool = True):
             area_m2 = _safe_float(row.get("Pond Area (m²)"), 0.0)
             density = _safe_float(row.get("Stocking Density (#/m²)"), 0.0)
             abw_g = _safe_float(row.get("Avg Body Weight (g)"), 0.0)
-            auto_biomass = (area_m2 * density * abw_g) / 1000 if abw_g > 0 else _safe_float(row.get("Current Biomass (kg)"), 0.0)
+            auto_biomass = (area_m2 * density * abw_g) / 1000
 
             doc_from_dates = _days_between(row.get("Stocking Date"), row.get("Sampling Date"), fallback=int(_safe_float(row.get("Current DOC"), 1)))
 
@@ -349,6 +353,8 @@ def render_virtual_farm(standalone: bool = True):
                 "current_biomass_kg": auto_biomass,
                 "accum_feed_kg": row["Accumulated Feed (kg)"],
                 "survival_pct": row["Current Survival (%)"],
+                "feed_price_per_kg": row.get("Feed Price (₹/kg)", 45.0),
+                "shrimp_price_per_kg": row.get("Shrimp Price (₹/kg)", 260.0),
             }
             all_runs.append(_simulate_deb(config, scenario))
 

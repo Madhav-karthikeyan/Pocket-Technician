@@ -21,6 +21,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 import sqlite3
+from pages.Virtual_Farm import render_virtual_farm
 
 
 
@@ -1327,13 +1328,10 @@ def feed_tray_logic(abw, last_feed, tray_left, consumed_time):
         "decision": decision
     }
 
-st.title("🦐 Shrimp Farm Weather & Feeding Logic")
+def render_weather_and_lunar(location):
+    st.subheader("🦐 Shrimp Farm Weather & Feeding Logic")
 
-location = st.text_input("Enter Farm Location", "Chennai")
-
-from geopy.geocoders import Nominatim
-
-if location:
+    from geopy.geocoders import Nominatim
 
     geolocator = Nominatim(user_agent="shrimp_app")
     try:
@@ -1341,21 +1339,17 @@ if location:
     except Exception as e:
         st.error(f"Unable to fetch location: {e}")
         show_support_note()
-        st.stop()
+        return
 
     if not location_obj:
         st.error("Location not found (try nearby town) or check the spelling")
-        st.stop()
+        return
 
-    # ✅ Use Nominatim coordinates
     lat = location_obj.latitude
     lon = location_obj.longitude
 
     st.success(f"Coordinates: {round(lat,4)}, {round(lon,4)}")
 
-    # ----------------------
-    # Weather Forecast (No Geocoding Here)
-    # ----------------------
     weather_url = "https://api.open-meteo.com/v1/forecast"
     weather_params = {
         "latitude": lat,
@@ -1373,22 +1367,20 @@ if location:
     except requests.exceptions.Timeout:
         st.error("Weather service timed out. Please try again.")
         show_support_note()
-        st.stop()
+        return
     except requests.exceptions.RequestException as e:
         st.error(f"Weather service error: {e}")
         show_support_note()
-        st.stop()
+        return
     except ValueError:
         st.error("Weather service returned an invalid response.")
         show_support_note()
-        st.stop()
-    # ----------------------
-    # Extract Current Data
-    # ----------------------
+        return
+
     if "current_weather" not in weather or "hourly" not in weather or "daily" not in weather:
         st.error("Weather data is incomplete right now.")
         show_support_note()
-        st.stop()
+        return
 
     current_temp = weather["current_weather"]["temperature"]
     current_wind = weather["current_weather"]["windspeed"]
@@ -1397,9 +1389,6 @@ if location:
     st.write("Temperature:", round(current_temp, 1), "°C")
     st.write("Wind Speed:", round(current_wind, 1), "km/h")
 
-    # ----------------------
-    # Rain Forecast (Next 24 hrs)
-    # ----------------------
     hourly_df = pd.DataFrame({
         "time": weather["hourly"]["time"],
         "temperature": weather["hourly"]["temperature_2m"],
@@ -1408,9 +1397,6 @@ if location:
 
     next_24_rain = hourly_df["rain"][:24].sum()
 
-    # ----------------------
-    # Feeding Logic Engine (Current)
-    # ----------------------
     st.subheader("Feeding Recommendation")
 
     if current_temp > 34:
@@ -1424,9 +1410,6 @@ if location:
     else:
         st.success("✅ Normal feeding schedule")
 
-    # ----------------------
-    # Daily Forecast
-    # ----------------------
     daily_df = pd.DataFrame({
         "Date": weather["daily"]["time"],
         "Max_temp": weather["daily"]["temperature_2m_max"],
@@ -1434,19 +1417,9 @@ if location:
         "Rain_total": weather["daily"]["precipitation_sum"]
     })
 
-    # Format date
     daily_df["Date"] = pd.to_datetime(daily_df["Date"]).dt.date
+    daily_df = daily_df.round({"Max_temp": 1, "Min_temp": 1, "Rain_total": 1})
 
-    # Round decimals
-    daily_df = daily_df.round({
-        "Max_temp": 1,
-        "Min_temp": 1,
-        "Rain_total": 1
-    })
-
-    # ----------------------
-    # Feeding Logic (Daily)
-    # ----------------------
     def feeding_decision(row):
         if row["Max_temp"] > 34:
             return "Increase Feed"
@@ -1461,9 +1434,6 @@ if location:
 
     daily_df["Feeding_Decision"] = daily_df.apply(feeding_decision, axis=1)
 
-    # ----------------------
-    # Coloring Function
-    # ----------------------
     def color_feed(val):
         if val == "Reduce Feed":
             return "background-color: #ffcccc"
@@ -1472,35 +1442,25 @@ if location:
         else:
             return ""
 
-    # Style Table
     styled_df = (
         daily_df.style
-        .format({
-            "Max_temp": "{:.1f}",
-            "Min_temp": "{:.1f}",
-            "Rain_total": "{:.1f}"
-        })
+        .format({"Max_temp": "{:.1f}", "Min_temp": "{:.1f}", "Rain_total": "{:.1f}"})
         .applymap(color_feed, subset=["Feeding_Decision"])
     )
 
     st.subheader("7-Day Forecast with Feeding Decision")
     st.table(styled_df)
-# =====================================================
-# Lunar tide
-# =====================================================
-        
-show_lunar_tide = st.checkbox("Show Lunar & Tide Information")
-if show_lunar_tide:
 
-    st.subheader("🌕 Lunar Information")
+    show_lunar_tide = st.checkbox("Show Lunar Information")
+    if show_lunar_tide:
+        st.subheader("🌕 Lunar Information")
+        phase_name = get_moon_name(moon_phase)
+        st.write("Today's Moon Phase:", phase_name)
 
-    phase_name = get_moon_name(moon_phase)
-    st.write("Today's Moon Phase:", phase_name)
-
-    if "Full Moon" in phase_name:
-        st.info("Molting activity may increase. Monitor feed trays carefully.")
-    elif "New Moon" in phase_name:
-        st.warning("Feeding response may reduce. Observe shrimp behavior.")
+        if "Full Moon" in phase_name:
+            st.info("Molting activity may increase. Monitor feed trays carefully.")
+        elif "New Moon" in phase_name:
+            st.warning("Feeding response may reduce. Observe shrimp behavior.")
 
 # =====================================================
 # Tide
@@ -1555,6 +1515,44 @@ if farm_name:
     data["farms"].setdefault(farm_name, {"ponds": {}})
 
 pond_name = st.sidebar.text_input("Pond Name")
+location = st.sidebar.text_input("Location", "")
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🧭 Select Mode")
+if "mode" not in st.session_state:
+    st.session_state["mode"] = "Technician"
+
+btn_col1, btn_col2 = st.sidebar.columns(2)
+if btn_col1.button("🛠 Technician", use_container_width=True):
+    st.session_state["mode"] = "Technician"
+if btn_col2.button("🌐 Virtual Farm", use_container_width=True):
+    st.session_state["mode"] = "Virtual Farm"
+
+st.sidebar.caption(f"Current mode: **{st.session_state['mode']}**")
+
+if st.session_state["mode"] == "Virtual Farm":
+    render_virtual_farm(standalone=False)
+    st.stop()
+
+st.sidebar.markdown(
+    """
+    <div style='background: linear-gradient(135deg, #eef9ff 0%, #e8fff1 100%);                border: 1px solid #cfe9d8; border-radius: 14px; padding: 10px; margin-top: 8px;'>
+      <svg width='100%' viewBox='0 0 360 140' xmlns='http://www.w3.org/2000/svg' role='img' aria-label='Shrimp farm doodle'>
+        <rect x='2' y='2' width='356' height='136' rx='12' fill='#f8fffb' stroke='#d2eede'/>
+        <path d='M20 88 Q70 58, 120 88 T220 88 T320 88' stroke='#66b9ff' stroke-width='4' fill='none'/>
+        <circle cx='56' cy='48' r='16' fill='#ffd98e'/>
+        <path d='M140 92 q22 -20 48 -6 q18 12 36 0' stroke='#ff8b8b' stroke-width='4' fill='none'/>
+        <path d='M144 92 q7 12 21 12' stroke='#ff8b8b' stroke-width='3' fill='none'/>
+        <circle cx='180' cy='86' r='2.8' fill='#333'/>
+        <rect x='246' y='48' width='54' height='34' rx='6' fill='#b7d8ff' stroke='#7aa9dd'/>
+        <line x1='273' y1='82' x2='273' y2='104' stroke='#7aa9dd' stroke-width='4'/>
+        <text x='20' y='125' font-size='13' fill='#2f6f5f' font-family='sans-serif'>Virtual Farm • Growth • Feed • Profit</text>
+      </svg>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
 pond = None
 
 if farm_name and pond_name:
@@ -1564,8 +1562,8 @@ if farm_name and pond_name:
         pond_name,
         {
             "initial_stock": 0,
-            "area": 0,
-            "depth": 0,
+            "area": 0.0,
+            "depth": 0.0,
             "stocking_date": str(date.today()),
             "feed_log": [],
             "sampling_log": []
@@ -1576,8 +1574,8 @@ if farm_name and pond_name:
 
     # ===== SAFE BACKWARD COMPATIBILITY =====
     pond.setdefault("initial_stock", 0)
-    pond.setdefault("area", 0)
-    pond.setdefault("depth", 0)
+    pond.setdefault("area", 0.0)
+    pond.setdefault("depth", 0.0)
     pond.setdefault("stocking_date", str(date.today()))
     pond.setdefault("feed_log", [])
     pond.setdefault("sampling_log", [])
@@ -1588,17 +1586,36 @@ if pond is None:
 
 # Pond Inputs
 pond["initial_stock"] = st.number_input("Initial Stock", value=pond["initial_stock"])
-pond["area"] = st.number_input("Pond Area (m2)", value=pond["area"])
-pond["depth"] = st.number_input("Average Depth (m)", value=pond["depth"])
+pond["area"] = st.number_input(
+    "Pond Area (m2)",
+    min_value=0.0,
+    value=float(pond["area"]),
+    step=0.01,
+    format="%.2f",
+)
+pond["depth"] = st.number_input(
+    "Average Depth (m)",
+    min_value=0.0,
+    value=float(pond["depth"]),
+    step=0.01,
+    format="%.2f",
+)
 pond["stocking_date"] = st.date_input(
     "Stocking Date",
     value=datetime.fromisoformat(pond["stocking_date"]).date()
 ).isoformat()
 
 volume = pond["area"] * pond["depth"]
-st.write(f"Pond Volume: {volume} m³")
+st.write(f"Pond Volume: {volume:.2f} m³")
+
+st.info("New: use the **Virtual Farm** page in the sidebar to run culture-level projections and what-if profitability scenarios.")
 
 save_data()
+
+if location:
+    render_weather_and_lunar(location)
+else:
+    st.info("Enter Location in sidebar to view weather technician recommendations.")
 
 # Feed
 daily_feed = st.number_input("Feed Given Today (kg)", 0.0)

@@ -1564,8 +1564,8 @@ if farm_name and pond_name:
         pond_name,
         {
             "initial_stock": 0,
-            "area": 0,
-            "depth": 0,
+            "area": 0.0,
+            "depth": 0.0,
             "stocking_date": str(date.today()),
             "feed_log": [],
             "sampling_log": []
@@ -1576,8 +1576,8 @@ if farm_name and pond_name:
 
     # ===== SAFE BACKWARD COMPATIBILITY =====
     pond.setdefault("initial_stock", 0)
-    pond.setdefault("area", 0)
-    pond.setdefault("depth", 0)
+    pond.setdefault("area", 0.0)
+    pond.setdefault("depth", 0.0)
     pond.setdefault("stocking_date", str(date.today()))
     pond.setdefault("feed_log", [])
     pond.setdefault("sampling_log", [])
@@ -1588,15 +1588,29 @@ if pond is None:
 
 # Pond Inputs
 pond["initial_stock"] = st.number_input("Initial Stock", value=pond["initial_stock"])
-pond["area"] = st.number_input("Pond Area (m2)", value=pond["area"])
-pond["depth"] = st.number_input("Average Depth (m)", value=pond["depth"])
+pond["area"] = st.number_input(
+    "Pond Area (m2)",
+    min_value=0.0,
+    value=float(pond["area"]),
+    step=0.01,
+    format="%.2f",
+)
+pond["depth"] = st.number_input(
+    "Average Depth (m)",
+    min_value=0.0,
+    value=float(pond["depth"]),
+    step=0.01,
+    format="%.2f",
+)
 pond["stocking_date"] = st.date_input(
     "Stocking Date",
     value=datetime.fromisoformat(pond["stocking_date"]).date()
 ).isoformat()
 
 volume = pond["area"] * pond["depth"]
-st.write(f"Pond Volume: {volume} m³")
+st.write(f"Pond Volume: {volume:.2f} m³")
+
+st.info("New: use the **Virtual Farm** page in the sidebar to run culture-level projections and what-if profitability scenarios.")
 
 save_data()
 

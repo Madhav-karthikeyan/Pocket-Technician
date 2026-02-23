@@ -51,10 +51,6 @@ def _safe_float(value, default=0.0):
 
 
 def _simulate_deb(config: dict, scenario: dict) -> pd.DataFrame:
-    """Simple DEB-like simulation: assimilation from feed minus maintenance.
-
-    biomass(t+1) = biomass(t) + [assimilation(feed ration) - maintenance] * survival_factor
-    """
     horizon = int(scenario["horizon_days"])
     doc_start = int(config["doc"])
 
@@ -65,9 +61,8 @@ def _simulate_deb(config: dict, scenario: dict) -> pd.DataFrame:
     feed_cost_per_kg = 45 * (1 + scenario["feed_cost_adj"] / 100)
     sale_price_per_kg = 260 * (1 + scenario["sale_price_adj"] / 100)
 
-    # DEB-style simplified coefficients
-    assim_eff = 0.68  # feed-to-growth conversion efficiency
-    k_maint = 0.0065  # daily maintenance coefficient on biomass
+    assim_eff = 0.68
+    k_maint = 0.0065
     daily_mortality = max(0.0, 0.0015 * (1 - scenario["survival_adj"] / 100))
 
     records = []
@@ -75,7 +70,6 @@ def _simulate_deb(config: dict, scenario: dict) -> pd.DataFrame:
     for day in range(horizon + 1):
         doc = doc_start + day
 
-        # Daily feeding logic: higher in early DOC, lower as DOC increases.
         if doc < 30:
             ration_pct = 0.06
         elif doc < 60:
@@ -117,154 +111,154 @@ def _simulate_deb(config: dict, scenario: dict) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
-st.set_page_config("Virtual Farm", layout="wide")
-st.title("🌐 Virtual Farm")
-st.caption("Project culture growth with a simple DEB-style simulation using what-if controls.")
+def render_virtual_farm(standalone: bool = True):
+    if standalone:
+        st.set_page_config("Virtual Farm", layout="wide")
 
-data = _load_data()
-farm_names = sorted(data.get("farms", {}).keys())
+    st.title("🌐 Virtual Farm")
+    st.caption("Project culture growth with a simple DEB-style simulation using what-if controls.")
 
-if not farm_names:
-    st.warning("No farms available yet. Please enter farm and pond data from the main page first.")
-    st.stop()
+    data = _load_data()
+    farm_names = sorted(data.get("farms", {}).keys())
 
-farm_name = st.selectbox("Farm", farm_names)
-farm = data["farms"][farm_name]
-ponds = farm.get("ponds", {})
+    if not farm_names:
+        st.warning("No farms available yet. Please enter farm and pond data from the main page first.")
+        return
 
-if not ponds:
-    st.warning("No ponds available in this farm.")
-    st.stop()
+    farm_name = st.selectbox("Farm", farm_names)
+    farm = data["farms"][farm_name]
+    ponds = farm.get("ponds", {})
 
-st.subheader("Initial Inputs")
-st.caption("You can keep decimal/fraction values for pond dimensions and tune pond-level simulation assumptions.")
+    if not ponds:
+        st.warning("No ponds available in this farm.")
+        return
 
-input_rows = []
-for pond_name, pond in sorted(ponds.items()):
-    latest = {}
-    sampling_log = pond.get("sampling_log", [])
-    if sampling_log:
-        latest = sampling_log[-1]
+    st.subheader("Initial Inputs")
+    st.caption("You can keep decimal/fraction values for pond dimensions and tune pond-level simulation assumptions.")
 
-    area = _safe_float(pond.get("area", 0.0))
-    depth = _safe_float(pond.get("depth", 0.0))
-    volume = area * depth
-    initial_stock = _safe_float(pond.get("initial_stock", 0.0))
-    stocking_density = (initial_stock / area) if area > 0 else 0.0
-    stocking_date = pond.get("stocking_date", str(date.today()))
-    doc = _calc_doc(stocking_date)
+    input_rows = []
+    for pond_name, pond in sorted(ponds.items()):
+        latest = {}
+        sampling_log = pond.get("sampling_log", [])
+        if sampling_log:
+            latest = sampling_log[-1]
 
-    current_biomass = _safe_float(latest.get("biomass", 0.0))
-    if current_biomass <= 0:
-        current_biomass = (initial_stock * 0.002)
+        area = _safe_float(pond.get("area", 0.0))
+        depth = _safe_float(pond.get("depth", 0.0))
+        volume = area * depth
+        initial_stock = _safe_float(pond.get("initial_stock", 0.0))
+        stocking_density = (initial_stock / area) if area > 0 else 0.0
+        stocking_date = pond.get("stocking_date", str(date.today()))
+        doc = _calc_doc(stocking_date)
 
-    total_feed = sum(_safe_float(item.get("feed", 0.0)) for item in pond.get("feed_log", []))
-    survival = _safe_float(latest.get("survival_pct", latest.get("survival", 80.0)), 80.0)
+        current_biomass = _safe_float(latest.get("biomass", 0.0))
+        if current_biomass <= 0:
+            current_biomass = initial_stock * 0.002
 
-    input_rows.append(
+        total_feed = sum(_safe_float(item.get("feed", 0.0)) for item in pond.get("feed_log", []))
+        survival = _safe_float(latest.get("survival_pct", latest.get("survival", 80.0)), 80.0)
+
+        input_rows.append(
+            {
+                "Pond": pond_name,
+                "Pond Area (m²)": round(area, 2),
+                "Avg Depth (m)": round(depth, 2),
+                "Pond Volume (m³)": round(volume, 2),
+                "Stocking Density (#/m²)": round(stocking_density, 2),
+                "Stocking Date": stocking_date,
+                "Current DOC": doc,
+                "Current Biomass (kg)": round(current_biomass, 2),
+                "Accumulated Feed (kg)": round(total_feed, 2),
+                "Current Survival (%)": round(survival, 2),
+            }
+        )
+
+    input_df = pd.DataFrame(input_rows)
+    st.dataframe(input_df, use_container_width=True)
+
+    st.subheader("What-if Scenario Controls")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        horizon_days = st.number_input("Projection Horizon (days)", min_value=7, max_value=240, value=45, step=1)
+    with c2:
+        survival_adj = st.slider("Survival Improvement (%)", min_value=-20, max_value=30, value=0)
+    with c3:
+        feed_cost_adj = st.slider("Feed Cost Change (%)", min_value=-30, max_value=40, value=0)
+    with c4:
+        sale_price_adj = st.slider("Sale Price Change (%)", min_value=-30, max_value=40, value=0)
+
+    if st.button("🚀 Project", type="primary", key="vf_project"):
+        scenario = {
+            "horizon_days": horizon_days,
+            "survival_adj": survival_adj,
+            "feed_cost_adj": feed_cost_adj,
+            "sale_price_adj": sale_price_adj,
+        }
+
+        all_runs = []
+        for row in input_rows:
+            config = {
+                "pond_name": row["Pond"],
+                "doc": row["Current DOC"],
+                "current_biomass_kg": row["Current Biomass (kg)"],
+                "accum_feed_kg": row["Accumulated Feed (kg)"],
+                "survival_pct": row["Current Survival (%)"],
+            }
+            all_runs.append(_simulate_deb(config, scenario))
+
+        st.session_state["virtual_projection_df"] = pd.concat(all_runs, ignore_index=True)
+
+    if "virtual_projection_df" not in st.session_state:
+        st.info("Set your what-if controls and click **Project** to run DEB-style projection.")
+        return
+
+    projection_df = st.session_state["virtual_projection_df"]
+    last_doc = projection_df.groupby("Pond", as_index=False).tail(1).copy()
+
+    st.subheader("Projected Farm Summary")
+    summary = pd.DataFrame(
         {
-            "Pond": pond_name,
-            "Pond Area (m²)": round(area, 2),
-            "Avg Depth (m)": round(depth, 2),
-            "Pond Volume (m³)": round(volume, 2),
-            "Stocking Density (#/m²)": round(stocking_density, 2),
-            "Stocking Date": stocking_date,
-            "Current DOC": doc,
-            "Current Biomass (kg)": round(current_biomass, 2),
-            "Accumulated Feed (kg)": round(total_feed, 2),
-            "Current Survival (%)": round(survival, 2),
+            "Total Projected Biomass (kg)": [last_doc["Biomass (kg)"].sum()],
+            "Total Feed Accumulated (kg)": [last_doc["Accumulated Feed (kg)"].sum()],
+            "Total Projected Revenue (₹)": [last_doc["Revenue (₹)"].sum()],
+            "Total Projected Feed Cost (₹)": [last_doc["Feed Cost (₹)"].sum()],
+            "Total Projected Profit (₹)": [last_doc["Profit (₹)"].sum()],
         }
     )
+    st.dataframe(summary.round(2), use_container_width=True)
 
-input_df = pd.DataFrame(input_rows)
-st.dataframe(input_df, use_container_width=True)
+    st.subheader("Essential Projection Graphs (Line Charts)")
 
-st.subheader("What-if Scenario Controls")
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    horizon_days = st.number_input("Projection Horizon (days)", min_value=7, max_value=240, value=45, step=1)
-with c2:
-    survival_adj = st.slider("Survival Improvement (%)", min_value=-20, max_value=30, value=0)
-with c3:
-    feed_cost_adj = st.slider("Feed Cost Change (%)", min_value=-30, max_value=40, value=0)
-with c4:
-    sale_price_adj = st.slider("Sale Price Change (%)", min_value=-30, max_value=40, value=0)
+    fig1, ax1 = plt.subplots()
+    for pond_name, pond_df in projection_df.groupby("Pond"):
+        ax1.plot(pond_df["DOC"], pond_df["Biomass (kg)"], marker=".", label=pond_name)
+    ax1.set_title("Biomass Projection by DOC")
+    ax1.set_xlabel("DOC")
+    ax1.set_ylabel("Biomass (kg)")
+    ax1.legend()
+    st.pyplot(fig1)
 
-if st.button("🚀 Project", type="primary"):
-    scenario = {
-        "horizon_days": horizon_days,
-        "survival_adj": survival_adj,
-        "feed_cost_adj": feed_cost_adj,
-        "sale_price_adj": sale_price_adj,
-    }
+    fig2, ax2 = plt.subplots()
+    for pond_name, pond_df in projection_df.groupby("Pond"):
+        ax2.plot(pond_df["DOC"], pond_df["Accumulated Feed (kg)"], marker=".", label=pond_name)
+    ax2.set_title("Total Feed Accumulation by DOC")
+    ax2.set_xlabel("DOC")
+    ax2.set_ylabel("Feed (kg)")
+    ax2.legend()
+    st.pyplot(fig2)
 
-    all_runs = []
-    for row in input_rows:
-        config = {
-            "pond_name": row["Pond"],
-            "doc": row["Current DOC"],
-            "current_biomass_kg": row["Current Biomass (kg)"],
-            "accum_feed_kg": row["Accumulated Feed (kg)"],
-            "survival_pct": row["Current Survival (%)"],
-        }
-        all_runs.append(_simulate_deb(config, scenario))
+    fig3, ax3 = plt.subplots()
+    for pond_name, pond_df in projection_df.groupby("Pond"):
+        ax3.plot(pond_df["DOC"], pond_df["Profit (₹)"], marker=".", label=pond_name)
+    ax3.axhline(0, color="black", linewidth=1)
+    ax3.set_title("Profitability Projection by DOC")
+    ax3.set_xlabel("DOC")
+    ax3.set_ylabel("Profit (₹)")
+    ax3.legend()
+    st.pyplot(fig3)
 
-    projection_df = pd.concat(all_runs, ignore_index=True)
-    st.session_state["virtual_projection_df"] = projection_df
+    st.success("Projection complete. Adjust controls and click Project again to run another what-if scenario.")
 
-if "virtual_projection_df" not in st.session_state:
-    st.info("Set your what-if controls and click **Project** to run DEB-style projection.")
-    st.stop()
 
-projection_df = st.session_state["virtual_projection_df"]
-last_doc = projection_df.groupby("Pond", as_index=False).tail(1).copy()
-
-st.subheader("Projected Farm Summary")
-summary = pd.DataFrame(
-    {
-        "Total Projected Biomass (kg)": [last_doc["Biomass (kg)"].sum()],
-        "Total Feed Accumulated (kg)": [last_doc["Accumulated Feed (kg)"].sum()],
-        "Total Projected Revenue (₹)": [last_doc["Revenue (₹)"].sum()],
-        "Total Projected Feed Cost (₹)": [last_doc["Feed Cost (₹)"].sum()],
-        "Total Projected Profit (₹)": [last_doc["Profit (₹)"].sum()],
-    }
-)
-st.dataframe(summary.round(2), use_container_width=True)
-
-m1, m2, m3, m4 = st.columns(4)
-m1.metric("Projected Biomass", f"{last_doc['Biomass (kg)'].sum():,.1f} kg")
-m2.metric("Projected Feed", f"{last_doc['Accumulated Feed (kg)'].sum():,.1f} kg")
-m3.metric("Projected Revenue", f"₹ {last_doc['Revenue (₹)'].sum():,.0f}")
-m4.metric("Projected Profit", f"₹ {last_doc['Profit (₹)'].sum():,.0f}")
-
-st.subheader("Essential Projection Graphs (Line Charts)")
-
-fig1, ax1 = plt.subplots()
-for pond_name, pond_df in projection_df.groupby("Pond"):
-    ax1.plot(pond_df["DOC"], pond_df["Biomass (kg)"], marker=".", label=pond_name)
-ax1.set_title("Biomass Projection by DOC")
-ax1.set_xlabel("DOC")
-ax1.set_ylabel("Biomass (kg)")
-ax1.legend()
-st.pyplot(fig1)
-
-fig2, ax2 = plt.subplots()
-for pond_name, pond_df in projection_df.groupby("Pond"):
-    ax2.plot(pond_df["DOC"], pond_df["Accumulated Feed (kg)"], marker=".", label=pond_name)
-ax2.set_title("Total Feed Accumulation by DOC")
-ax2.set_xlabel("DOC")
-ax2.set_ylabel("Feed (kg)")
-ax2.legend()
-st.pyplot(fig2)
-
-fig3, ax3 = plt.subplots()
-for pond_name, pond_df in projection_df.groupby("Pond"):
-    ax3.plot(pond_df["DOC"], pond_df["Profit (₹)"], marker=".", label=pond_name)
-ax3.axhline(0, color="black", linewidth=1)
-ax3.set_title("Profitability Projection by DOC")
-ax3.set_xlabel("DOC")
-ax3.set_ylabel("Profit (₹)")
-ax3.legend()
-st.pyplot(fig3)
-
-st.success("Projection complete. Adjust controls and click Project again to run another what-if scenario.")
+if __name__ == "__main__":
+    render_virtual_farm(standalone=True)

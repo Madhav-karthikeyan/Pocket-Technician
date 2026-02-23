@@ -21,6 +21,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 import sqlite3
+from pages.Virtual_Farm import render_virtual_farm
 
 
 
@@ -1558,20 +1559,15 @@ pond_name = st.sidebar.text_input("Pond Name")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🌐 Virtual Farm")
+view_mode = st.sidebar.radio(
+    "Workspace",
+    ["Farm Details", "Virtual Farm Projection"],
+    label_visibility="collapsed",
+)
 
-if st.sidebar.button("🔎 Visualize Virtual Farm", use_container_width=True):
-    try:
-        st.switch_page("pages/Virtual_Farm.py")
-    except Exception:
-        st.session_state["virtual_farm_nav_failed"] = True
-
-st.sidebar.markdown("[🚀 Open Virtual Farm Projection](./Virtual_Farm)")
-
-if st.session_state.get("virtual_farm_nav_failed"):
-    st.sidebar.warning("Automatic navigation failed in this environment.")
-    st.sidebar.caption("Use the link above, or open **Virtual_Farm** from the Streamlit pages menu.")
-else:
-    st.sidebar.caption("Click **Visualize Virtual Farm** or use the link above.")
+if view_mode == "Virtual Farm Projection":
+    render_virtual_farm(standalone=False)
+    st.stop()
 
 st.sidebar.markdown(
     """

@@ -1559,9 +1559,13 @@ pond_name = st.sidebar.text_input("Pond Name")
 st.sidebar.markdown("---")
 st.sidebar.subheader("🌐 Virtual Farm")
 
-if hasattr(st, "switch_page"):
-    if st.sidebar.button("Open Virtual Farm Projection", use_container_width=True):
-        st.switch_page("pages/Virtual_Farm.py")
+if hasattr(st.sidebar, "page_link"):
+    st.sidebar.page_link(
+        "pages/Virtual_Farm.py",
+        label="Open Virtual Farm Projection",
+        icon="🚀",
+        use_container_width=True,
+    )
 else:
     st.sidebar.info("Open **Virtual Farm** from Streamlit pages menu.")
 

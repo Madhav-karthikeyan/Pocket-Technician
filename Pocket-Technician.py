@@ -1754,23 +1754,23 @@ if pond["sampling_log"]:
 # FEED EFFICIENCY TREND
 # =====================================================
 
-#st.subheader("📊 Feed Efficiency Trend (Weekly FCR)")
+st.subheader("📊 Feed Efficiency Trend (Weekly FCR)")
 
-#if pond["sampling_log"]:
- #   df = pd.DataFrame(pond["sampling_log"])
+if pond["sampling_log"]:
+    df = pd.DataFrame(pond["sampling_log"])
 
-  #  if "weekly_fcr" in df.columns:
-   #     df_fcr = df.dropna(subset=["weekly_fcr"])
+    if "weekly_fcr" in df.columns:
+        df_fcr = df.dropna(subset=["weekly_fcr"])
 
-    #    if not df_fcr.empty:
-     #       fig, ax = plt.subplots()
-      #      ax.plot(df_fcr["DOC"], df_fcr["weekly_fcr"], marker="o")
-       #     ax.set_xlabel("DOC")
-        #    ax.set_ylabel("Weekly FCR")
-         #   ax.set_title("Feed Efficiency Trend")
-          #  st.pyplot(fig)
-       # else:
-        #    st.info("Weekly FCR data available from 2nd sampling onwards.")
+        if not df_fcr.empty:
+            fig, ax = plt.subplots()
+            ax.plot(df_fcr["DOC"], df_fcr["weekly_fcr"], marker="o")
+            ax.set_xlabel("DOC")
+            ax.set_ylabel("Weekly FCR")
+            ax.set_title("Feed Efficiency Trend")
+            st.pyplot(fig)
+        else:
+            st.info("Weekly FCR data available from 2nd sampling onwards.")
 # =====================================================
 # HARVEST READINESS PREDICTOR
 # =====================================================
@@ -2259,6 +2259,7 @@ if st.button("Generate Multi-Pond Farm Report", key="multi_farm_report"):
 
     # Download Button
     with open(file_path, "rb") as f:
+        
         st.download_button(
             "📥 Download Farm Comparison Report",
             f,

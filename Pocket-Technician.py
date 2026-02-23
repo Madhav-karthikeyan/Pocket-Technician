@@ -1559,8 +1559,19 @@ pond_name = st.sidebar.text_input("Pond Name")
 st.sidebar.markdown("---")
 st.sidebar.subheader("🌐 Virtual Farm")
 
+if st.sidebar.button("🔎 Visualize Virtual Farm", use_container_width=True):
+    try:
+        st.switch_page("pages/Virtual_Farm.py")
+    except Exception:
+        st.session_state["virtual_farm_nav_failed"] = True
+
 st.sidebar.markdown("[🚀 Open Virtual Farm Projection](./Virtual_Farm)")
-st.sidebar.caption("If the link does not open, use the Streamlit pages menu and select **Virtual Farm**.")
+
+if st.session_state.get("virtual_farm_nav_failed"):
+    st.sidebar.warning("Automatic navigation failed in this environment.")
+    st.sidebar.caption("Use the link above, or open **Virtual_Farm** from the Streamlit pages menu.")
+else:
+    st.sidebar.caption("Click **Visualize Virtual Farm** or use the link above.")
 
 st.sidebar.markdown(
     """

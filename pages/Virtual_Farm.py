@@ -1,3 +1,4 @@
+import io
 import json
 import os
 import sqlite3
@@ -6,6 +7,7 @@ from datetime import date, datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
+from matplotlib.backends.backend_pdf import PdfPages
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
@@ -74,6 +76,16 @@ def _safe_float(value, default=0.0):
         return default
 
 
+
+
+def _days_between(start_date_value, end_date_value, fallback=1):
+    try:
+        start_dt = pd.to_datetime(start_date_value).date()
+        end_dt = pd.to_datetime(end_date_value).date()
+        return max(1, (end_dt - start_dt).days + 1)
+    except Exception:
+        return fallback
+
 def _simulate_deb(config: dict, scenario: dict) -> pd.DataFrame:
     horizon = int(scenario["horizon_days"])
     doc_start = int(config["doc"])
@@ -135,11 +147,81 @@ def _simulate_deb(config: dict, scenario: dict) -> pd.DataFrame:
     return pd.DataFrame(records)
 
 
+def _build_projection_pdf(farm_name: str, report_payload: dict) -> bytes:
+    projection_df = pd.DataFrame(report_payload.get("projection", []))
+    summary_df = pd.DataFrame(report_payload.get("summary", []))
+    scenario = report_payload.get("scenario", {})
+
+    pdf_buffer = io.BytesIO()
+    with PdfPages(pdf_buffer) as pdf:
+        fig_cover, ax_cover = plt.subplots(figsize=(8.27, 11.69))
+        fig_cover.text(0.08, 0.95, "Virtual Farm Advanced Projection Report", fontsize=16, weight="bold")
+        fig_cover.text(0.08, 0.91, f"Farm: {farm_name}", fontsize=12)
+        fig_cover.text(0.08, 0.88, f"Generated: {report_payload.get('created_at', '')}", fontsize=10)
+
+        y = 0.82
+        fig_cover.text(0.08, y, "Scenario Inputs", fontsize=12, weight="bold")
+        y -= 0.03
+        for k, v in scenario.items():
+            fig_cover.text(0.1, y, f"• {k}: {v}", fontsize=10)
+            y -= 0.025
+
+        if not summary_df.empty:
+            y -= 0.01
+            fig_cover.text(0.08, y, "Projection Summary", fontsize=12, weight="bold")
+            y -= 0.02
+            for col in summary_df.columns:
+                fig_cover.text(0.1, y, f"• {col}: {summary_df.iloc[0][col]}", fontsize=10)
+                y -= 0.025
+
+        ax_cover.axis("off")
+        pdf.savefig(fig_cover, bbox_inches="tight")
+        plt.close(fig_cover)
+
+        if not projection_df.empty:
+            fig1, ax1 = plt.subplots(figsize=(10, 5))
+            for pond_name, pond_df in projection_df.groupby("Pond"):
+                ax1.plot(pond_df["DOC"], pond_df["Biomass (kg)"], marker=".", label=pond_name)
+            ax1.set_title("Biomass Projection by DOC")
+            ax1.set_xlabel("DOC")
+            ax1.set_ylabel("Biomass (kg)")
+            ax1.legend()
+            fig1.tight_layout()
+            pdf.savefig(fig1)
+            plt.close(fig1)
+
+            fig2, ax2 = plt.subplots(figsize=(10, 5))
+            for pond_name, pond_df in projection_df.groupby("Pond"):
+                ax2.plot(pond_df["DOC"], pond_df["Accumulated Feed (kg)"], marker=".", label=pond_name)
+            ax2.set_title("Total Feed Accumulation by DOC")
+            ax2.set_xlabel("DOC")
+            ax2.set_ylabel("Feed (kg)")
+            ax2.legend()
+            fig2.tight_layout()
+            pdf.savefig(fig2)
+            plt.close(fig2)
+
+            fig3, ax3 = plt.subplots(figsize=(10, 5))
+            for pond_name, pond_df in projection_df.groupby("Pond"):
+                ax3.plot(pond_df["DOC"], pond_df["Profit (₹)"], marker=".", label=pond_name)
+            ax3.axhline(0, color="black", linewidth=1)
+            ax3.set_title("Profitability Projection by DOC")
+            ax3.set_xlabel("DOC")
+            ax3.set_ylabel("Profit (₹)")
+            ax3.legend()
+            fig3.tight_layout()
+            pdf.savefig(fig3)
+            plt.close(fig3)
+
+    pdf_buffer.seek(0)
+    return pdf_buffer.getvalue()
+
+
 def render_virtual_farm(standalone: bool = True):
     if standalone:
         st.set_page_config("Virtual Farm", layout="wide")
 
-    st.title("Virtual Farm")
+    st.title("🌐 Virtual Farm")
     st.caption("Project culture growth with a simple DEB-style simulation using what-if controls.")
 
     data = _load_data()
@@ -169,11 +251,11 @@ def render_virtual_farm(standalone: bool = True):
 
         area = _safe_float(pond.get("area", 0.0))
         depth = _safe_float(pond.get("depth", 0.0))
-        volume = area * depth
         initial_stock = _safe_float(pond.get("initial_stock", 0.0))
         stocking_density = (initial_stock / area) if area > 0 else 0.0
         stocking_date = pond.get("stocking_date", str(date.today()))
-        doc = _calc_doc(stocking_date)
+        latest_sampling_date = latest.get("date", str(date.today()))
+        doc = _days_between(stocking_date, latest_sampling_date, fallback=_calc_doc(stocking_date))
 
         current_biomass = _safe_float(latest.get("biomass", 0.0))
         if current_biomass <= 0:
@@ -181,15 +263,17 @@ def render_virtual_farm(standalone: bool = True):
 
         total_feed = sum(_safe_float(item.get("feed", 0.0)) for item in pond.get("feed_log", []))
         survival = _safe_float(latest.get("survival_pct", latest.get("survival", 80.0)), 80.0)
+        abw_g = (current_biomass * 1000 / initial_stock) if initial_stock > 0 else 0.0
 
         input_rows.append(
             {
                 "Pond": pond_name,
                 "Pond Area (m²)": round(area, 2),
                 "Avg Depth (m)": round(depth, 2),
-                "Pond Volume (m³)": round(volume, 2),
+                "Avg Body Weight (g)": round(abw_g, 2),
                 "Stocking Density (#/m²)": round(stocking_density, 2),
                 "Stocking Date": stocking_date,
+                "Sampling Date": latest_sampling_date,
                 "Current DOC": doc,
                 "Current Biomass (kg)": round(current_biomass, 2),
                 "Accumulated Feed (kg)": round(total_feed, 2),
@@ -199,6 +283,7 @@ def render_virtual_farm(standalone: bool = True):
 
     input_df = pd.DataFrame(input_rows)
     input_df["Stocking Date"] = pd.to_datetime(input_df["Stocking Date"], errors="coerce").dt.date
+    input_df["Sampling Date"] = pd.to_datetime(input_df["Sampling Date"], errors="coerce").dt.date
 
     editable_df = st.data_editor(
         input_df,
@@ -208,11 +293,12 @@ def render_virtual_farm(standalone: bool = True):
         column_config={
             "Pond Area (m²)": st.column_config.NumberColumn("Pond Area (m²)", min_value=0.01, step=0.01, format="%.2f"),
             "Avg Depth (m)": st.column_config.NumberColumn("Avg Depth (m)", min_value=0.01, step=0.01, format="%.2f"),
-            "Pond Volume (m³)": st.column_config.NumberColumn("Pond Volume (m³)", min_value=0.01, step=0.01, format="%.2f"),
+            "Avg Body Weight (g)": st.column_config.NumberColumn("Avg Body Weight (g)", min_value=0.0, step=0.01, format="%.2f"),
             "Stocking Density (#/m²)": st.column_config.NumberColumn(
                 "Stocking Density (#/m²)", min_value=0.0, step=0.1, format="%.2f"
             ),
             "Stocking Date": st.column_config.DateColumn("Stocking Date", format="YYYY-MM-DD"),
+            "Sampling Date": st.column_config.DateColumn("Sampling Date", format="YYYY-MM-DD"),
             "Current DOC": st.column_config.NumberColumn("Current DOC", min_value=1, step=1, format="%d"),
             "Current Biomass (kg)": st.column_config.NumberColumn(
                 "Current Biomass (kg)", min_value=0.0, step=0.1, format="%.2f"
@@ -226,7 +312,7 @@ def render_virtual_farm(standalone: bool = True):
         },
         key="vf_editor",
     )
-    st.caption("Update any pond values in this table, then click **🚀 Project** to simulate the selected scenario.")
+    st.caption("Update any pond values in this table (including ABW and Sampling Date), then click **🚀 Project** to simulate the selected scenario.")
 
     st.subheader("What-if Scenario Controls")
     c1, c2, c3, c4 = st.columns(4)
@@ -250,10 +336,17 @@ def render_virtual_farm(standalone: bool = True):
         all_runs = []
         editable_rows = editable_df.to_dict(orient="records")
         for row in editable_rows:
+            area_m2 = _safe_float(row.get("Pond Area (m²)"), 0.0)
+            density = _safe_float(row.get("Stocking Density (#/m²)"), 0.0)
+            abw_g = _safe_float(row.get("Avg Body Weight (g)"), 0.0)
+            auto_biomass = (area_m2 * density * abw_g) / 1000 if abw_g > 0 else _safe_float(row.get("Current Biomass (kg)"), 0.0)
+
+            doc_from_dates = _days_between(row.get("Stocking Date"), row.get("Sampling Date"), fallback=int(_safe_float(row.get("Current DOC"), 1)))
+
             config = {
                 "pond_name": row["Pond"],
-                "doc": row["Current DOC"],
-                "current_biomass_kg": row["Current Biomass (kg)"],
+                "doc": doc_from_dates,
+                "current_biomass_kg": auto_biomass,
                 "accum_feed_kg": row["Accumulated Feed (kg)"],
                 "survival_pct": row["Current Survival (%)"],
             }
@@ -291,22 +384,39 @@ def render_virtual_farm(standalone: bool = True):
         "projection": projection_df.round(4).to_dict(orient="records"),
     }
     report_payload = json.loads(json.dumps(report_payload, default=str))
+    report_pdf = _build_projection_pdf(farm_name, report_payload)
+    report_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     report_col1, report_col2 = st.columns([1, 1])
     with report_col1:
-        if st.button("💾 Save Advanced Projection Report", type="secondary", key="save_vf_report"):
+        if st.button("💾 Save Advanced Projection Report (PDF)", type="secondary", key="save_vf_report"):
+            reports_dir = os.path.join(BASE_DIR, "reports", "virtual_farm")
+            os.makedirs(reports_dir, exist_ok=True)
+            filename = f"virtual_farm_report_{farm_name}_{report_timestamp}.pdf"
+            full_path = os.path.join(reports_dir, filename)
+
+            with open(full_path, "wb") as f:
+                f.write(report_pdf)
+
             reports = farm.setdefault("virtual_projection_reports", [])
-            reports.append(report_payload)
+            reports.append(
+                {
+                    "created_at": report_payload["created_at"],
+                    "file_name": filename,
+                    "file_path": os.path.relpath(full_path, BASE_DIR),
+                    "scenario": report_payload["scenario"],
+                }
+            )
             data.setdefault("farms", {})[farm_name] = farm
             _save_data(data)
-            st.success("Advanced projection report saved to farm records.")
+            st.success(f"Advanced projection report saved as PDF: {filename}")
 
     with report_col2:
         st.download_button(
-            "⬇️ Download Advanced Projection Report (JSON)",
-            data=json.dumps(report_payload, ensure_ascii=False, indent=2),
-            file_name=f"virtual_farm_report_{farm_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            mime="application/json",
+            "⬇️ Download Advanced Projection Report (PDF)",
+            data=report_pdf,
+            file_name=f"virtual_farm_report_{farm_name}_{report_timestamp}.pdf",
+            mime="application/pdf",
             use_container_width=True,
         )
 

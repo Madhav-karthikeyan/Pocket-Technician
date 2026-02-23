@@ -223,7 +223,7 @@ def render_virtual_farm(standalone: bool = True):
     if standalone:
         st.set_page_config("Virtual Farm", layout="wide")
 
-    st.title("🌐 Virtual Farm")
+    st.title("Virtual Farm")
     st.caption("Project culture growth with a simple DEB-style simulation using what-if controls.")
 
     data = _load_data()

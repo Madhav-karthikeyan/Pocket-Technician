@@ -1633,6 +1633,12 @@ if not st.session_state["onboarding_done"]:
             st.session_state["farm_name"] = clean_farm_name
             st.session_state["pond_name"] = clean_pond_name
             st.session_state["mode"] = selected_mode
+            save_user_log(
+                st.session_state.get("user_name", ""),
+                st.session_state.get("location", ""),
+                farm_name=st.session_state["farm_name"],
+                pond_name=st.session_state["pond_name"],
+            )
             st.session_state["onboarding_done"] = True
             st.rerun()
 

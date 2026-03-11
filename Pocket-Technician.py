@@ -45,6 +45,7 @@ def get_moon_name(phase):
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
 DATA_FILE = os.path.join(BASE_DIR, "farm_data.json")
 DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
+USER_LOG_FILE = os.path.join(BASE_DIR, "user_log.json")
 
 
 SUPPORT_NOTE = (
@@ -57,13 +58,27 @@ def show_support_note():
     st.info(SUPPORT_NOTE)
 
 
-def get_user_name(container=None):
-    if "user_name" not in st.session_state:
-        st.session_state["user_name"] = ""
+def save_user_log(user_name, location):
+    log_payload = {"users": []}
+    try:
+        if os.path.exists(USER_LOG_FILE):
+            with open(USER_LOG_FILE, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict) and isinstance(loaded.get("users"), list):
+                    log_payload = loaded
+    except Exception:
+        log_payload = {"users": []}
 
-    input_container = container if container is not None else st
-    input_container.text_input("User Name", key="user_name")
-    return st.session_state["user_name"].strip()
+    log_payload["users"].append(
+        {
+            "user_name": user_name,
+            "location": location,
+            "logged_at": datetime.now().isoformat(),
+        }
+    )
+
+    with open(USER_LOG_FILE, "w", encoding="utf-8") as f:
+        json.dump(log_payload, f, ensure_ascii=False, indent=2)
 
 
 # Reference chart: Count per kg → %Feed → Feed per 100k
@@ -1522,20 +1537,48 @@ st.title("🦐 Pocket Technician")
 
 if "mode" not in st.session_state:
     st.session_state["mode"] = "Technician"
+if "user_cover_done" not in st.session_state:
+    st.session_state["user_cover_done"] = False
 if "onboarding_done" not in st.session_state:
     st.session_state["onboarding_done"] = False
 
+if not st.session_state["user_cover_done"]:
+    st.markdown("### Thank you for using Pocket Technician 🙏")
+    st.caption("Please enter your user details before proceeding to farm and pond setup.")
+
+    _, center_panel, _ = st.columns([1, 2, 1])
+    with center_panel:
+        with st.form("user_cover_form", clear_on_submit=False):
+            user_name = st.text_input("User Name", key="cover_user_name")
+            location = st.text_input("Location", key="cover_location")
+            user_submitted = st.form_submit_button("Continue", use_container_width=True)
+
+        if user_submitted:
+            if not user_name or not location:
+                st.warning("User Name and Location are required.")
+                st.stop()
+
+            st.session_state["user_name"] = user_name.strip()
+            st.session_state["location"] = location.strip()
+            save_user_log(st.session_state["user_name"], st.session_state["location"])
+            st.session_state["user_cover_done"] = True
+            st.rerun()
+
+    st.stop()
+
 if not st.session_state["onboarding_done"]:
     st.markdown("### Welcome")
-    st.caption("Enter farm details and choose your mode to continue.")
+    st.caption("Enter farm and pond details to continue.")
+    st.info(
+        f"Thank you, {st.session_state.get('user_name', '')}. "
+        f"Location: {st.session_state.get('location', '')}."
+    )
 
     _, center_panel, _ = st.columns([1, 2, 1])
     with center_panel:
         with st.form("farm_setup_form", clear_on_submit=False):
-            user_name = get_user_name()
             farm_name = st.text_input("Farm Name", key="setup_farm_name")
             pond_name = st.text_input("Pond Name", key="setup_pond_name")
-            location = st.text_input("Location", "", key="setup_location")
             selected_mode = st.radio(
                 "Select Mode",
                 options=["Technician", "Virtual Farm"],
@@ -1550,7 +1593,6 @@ if not st.session_state["onboarding_done"]:
                 st.stop()
             st.session_state["farm_name"] = farm_name.strip()
             st.session_state["pond_name"] = pond_name.strip()
-            st.session_state["location"] = location.strip()
             st.session_state["mode"] = selected_mode
             st.session_state["onboarding_done"] = True
             st.rerun()
@@ -1569,7 +1611,7 @@ if farm_name:
         location = farm_entry["location"]
 
 st.sidebar.subheader("Navigation")
-st.session_state["mode"] = st.sidebar.radio(
+st.session_state["mode"] = st.sidebar.selectbox(
     "Mode",
     options=["Technician", "Virtual Farm"],
     index=0 if st.session_state["mode"] == "Technician" else 1,
@@ -1577,17 +1619,34 @@ st.session_state["mode"] = st.sidebar.radio(
 if st.sidebar.button("🔁 Change Farm / Pond", use_container_width=True):
     st.session_state["onboarding_done"] = False
     st.rerun()
+if st.sidebar.button("👤 Change User / Location", use_container_width=True):
+    st.session_state["user_cover_done"] = False
+    st.session_state["onboarding_done"] = False
+    st.rerun()
 
 if st.session_state["mode"] == "Virtual Farm":
     render_virtual_farm(standalone=False)
     st.stop()
 
-st.markdown("#### AI Modules")
-placeholder_col1, placeholder_col2 = st.columns(2)
-with placeholder_col1:
-    with st.expander("🧠 Shrimp Larvae Detection (CNN)", expanded=True):
-        render_shrimp_larvae_detection()
-placeholder_col2.info("🧠 **Checktray Analysis (CNN Object Detection)**\nReserved for tray image analytics and recommendation card.")
+st.sidebar.subheader("Technician Modules")
+selected_module = st.sidebar.selectbox(
+    "Select Technician Section",
+    options=["Sampling", "Feed Tray AI", "Shrimp Larvae Detection"],
+    key="technician_module",
+)
+
+if selected_module == "Shrimp Larvae Detection":
+    st.markdown("#### Shrimp Larvae Detection")
+    render_shrimp_larvae_detection()
+    st.stop()
+
+if selected_module == "Feed Tray AI":
+    st.markdown("#### Feed Tray AI")
+    st.info(
+        "🧠 **Feed Tray AI (CNN Object Detection)**\n"
+        "Reserved for tray image analytics and recommendation card."
+    )
+    st.stop()
 
 pond = None
 
@@ -1617,6 +1676,9 @@ if farm_name and pond_name:
 
 if pond is None:
     st.stop()
+
+st.markdown("#### Sampling")
+st.caption("All pond sampling inputs, calculations, and reports are grouped in this section.")
 
 # Pond Inputs
 pond["initial_stock"] = st.number_input("Initial Stock", value=pond["initial_stock"])

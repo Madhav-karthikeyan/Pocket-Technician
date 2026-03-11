@@ -58,27 +58,45 @@ def show_support_note():
     st.info(SUPPORT_NOTE)
 
 
-def save_user_log(user_name, location):
+def save_user_log(user_name, location, farm_name="", pond_name=""):
+    """Persist user onboarding information for usage tracking."""
+    cleaned_name = (user_name or "").strip()
+    cleaned_location = (location or "").strip()
+    if not cleaned_name or not cleaned_location:
+        return False
+
     log_payload = {"users": []}
     try:
         if os.path.exists(USER_LOG_FILE):
             with open(USER_LOG_FILE, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
-                if isinstance(loaded, dict) and isinstance(loaded.get("users"), list):
-                    log_payload = loaded
-    except Exception:
+                if isinstance(loaded, dict):
+                    existing_users = loaded.get("users", [])
+                    if isinstance(existing_users, list):
+                        log_payload["users"] = existing_users
+                elif isinstance(loaded, list):
+                    # Backward compatibility if a plain list was saved previously
+                    log_payload["users"] = loaded
+    except (json.JSONDecodeError, OSError):
         log_payload = {"users": []}
 
     log_payload["users"].append(
         {
-            "user_name": user_name,
-            "location": location,
-            "logged_at": datetime.now().isoformat(),
+            "user_name": cleaned_name,
+            "location": cleaned_location,
+            "farm_name": (farm_name or "").strip(),
+            "pond_name": (pond_name or "").strip(),
+            "logged_at": datetime.now().isoformat(timespec="seconds"),
         }
     )
 
-    with open(USER_LOG_FILE, "w", encoding="utf-8") as f:
-        json.dump(log_payload, f, ensure_ascii=False, indent=2)
+    try:
+        with open(USER_LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(log_payload, f, ensure_ascii=False, indent=2)
+    except OSError:
+        return False
+
+    return True
 
 
 # Reference chart: Count per kg → %Feed → Feed per 100k
@@ -1554,13 +1572,17 @@ if not st.session_state["user_cover_done"]:
             user_submitted = st.form_submit_button("Continue", use_container_width=True)
 
         if user_submitted:
-            if not user_name or not location:
+            clean_user_name = user_name.strip()
+            clean_location = location.strip()
+            if not clean_user_name or not clean_location:
                 st.warning("User Name and Location are required.")
                 st.stop()
 
-            st.session_state["user_name"] = user_name.strip()
-            st.session_state["location"] = location.strip()
-            save_user_log(st.session_state["user_name"], st.session_state["location"])
+            st.session_state["user_name"] = clean_user_name
+            st.session_state["location"] = clean_location
+            if not save_user_log(st.session_state["user_name"], st.session_state["location"]):
+                st.error("Could not save user details to user_log.json. Please check file permissions.")
+                st.stop()
             st.session_state["user_cover_done"] = True
             st.rerun()
 
@@ -1588,12 +1610,20 @@ if not st.session_state["onboarding_done"]:
             submitted = st.form_submit_button("Continue", use_container_width=True)
 
         if submitted:
-            if not farm_name or not pond_name:
+            clean_farm_name = farm_name.strip()
+            clean_pond_name = pond_name.strip()
+            if not clean_farm_name or not clean_pond_name:
                 st.warning("Farm Name and Pond Name are required.")
                 st.stop()
-            st.session_state["farm_name"] = farm_name.strip()
-            st.session_state["pond_name"] = pond_name.strip()
+            st.session_state["farm_name"] = clean_farm_name
+            st.session_state["pond_name"] = clean_pond_name
             st.session_state["mode"] = selected_mode
+            save_user_log(
+                st.session_state.get("user_name", ""),
+                st.session_state.get("location", ""),
+                farm_name=st.session_state["farm_name"],
+                pond_name=st.session_state["pond_name"],
+            )
             st.session_state["onboarding_done"] = True
             st.rerun()
 

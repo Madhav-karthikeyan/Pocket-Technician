@@ -1,8 +1,10 @@
 import base64
 import importlib.util
+import json
 import os
 import tempfile
 import time
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -13,6 +15,7 @@ DEFAULT_MODEL_ID = "pl-detection-gktye/3"
 DEFAULT_CONF_THRESHOLD = 0.5
 SCALE_MM_PER_PIXEL = 0.02
 FRAME_SKIP = 10
+LEARNING_LOG_PATH = Path("data/larvae_learning_log.jsonl")
 
 
 def _cv2_available():
@@ -45,14 +48,17 @@ def stage_color(stage):
     return colors.get(stage, (255, 255, 255))
 
 
-def call_roboflow(image, model_id=DEFAULT_MODEL_ID):
+def call_roboflow(image, model_id=DEFAULT_MODEL_ID, confidence=DEFAULT_CONF_THRESHOLD, overlap=0.35):
     import cv2
 
     api_key = _get_api_key()
     _, buffer = cv2.imencode(".jpg", image)
     img_base64 = base64.b64encode(buffer).decode("utf-8")
 
-    url = f"https://serverless.roboflow.com/{model_id}?api_key={api_key}"
+    url = (
+        f"https://serverless.roboflow.com/{model_id}"
+        f"?api_key={api_key}&confidence={int(confidence * 100)}&overlap={int(overlap * 100)}"
+    )
     response = requests.post(
         url,
         data=img_base64,
@@ -63,10 +69,16 @@ def call_roboflow(image, model_id=DEFAULT_MODEL_ID):
     return response.json()
 
 
-def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD):
+def _log_learning_event(event):
+    LEARNING_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with LEARNING_LOG_PATH.open("a", encoding="utf-8") as fp:
+        fp.write(json.dumps(event) + "\n")
+
+
+def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=DEFAULT_MODEL_ID):
     import cv2
 
-    result = call_roboflow(image)
+    result = call_roboflow(image, model_id=model_id, confidence=conf_threshold, overlap=overlap)
     predictions = result.get("predictions", [])
     filtered_preds = [p for p in predictions if p["confidence"] > conf_threshold]
 
@@ -119,10 +131,10 @@ def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD):
         "Density (pixel-based)": round(density, 6),
         "Stage Distribution": stage_distribution,
     }
-    return image, summary, shrimp_data
+    return image, summary, shrimp_data, result
 
 
-def process_video(video_path, output_path):
+def process_video(video_path, output_path, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=DEFAULT_MODEL_ID):
     import cv2
 
     cap = cv2.VideoCapture(video_path)
@@ -141,7 +153,12 @@ def process_video(video_path, output_path):
             break
         frame_count += 1
         if frame_count % FRAME_SKIP == 0:
-            annotated_frame, summary, _ = analyze_image(frame)
+            annotated_frame, summary, _, _ = analyze_image(
+                frame,
+                conf_threshold=conf_threshold,
+                overlap=overlap,
+                model_id=model_id,
+            )
             final_summary = summary
             out.write(annotated_frame)
         else:
@@ -160,6 +177,29 @@ def render_shrimp_larvae_detection():
         st.warning("OpenCV (`cv2`) is not installed in this environment, so larvae detection is unavailable.")
         return
 
+    st.markdown("#### Detection Controls")
+    model_id = st.text_input("YOLO Model ID", value=DEFAULT_MODEL_ID, help="Roboflow model version, for example project-name/5")
+    conf_threshold = st.slider("Confidence Threshold", min_value=0.1, max_value=0.9, value=DEFAULT_CONF_THRESHOLD, step=0.05)
+    overlap = st.slider(
+        "Crowded Scene Overlap",
+        min_value=0.1,
+        max_value=0.9,
+        value=0.35,
+        step=0.05,
+        help="Higher overlap helps retain neighboring larvae in dense images.",
+    )
+    learning_mode = st.toggle(
+        "Active Learning Mode",
+        value=False,
+        help="Save challenging samples + your corrections so you can retrain YOLO and keep improving over time.",
+    )
+
+    if learning_mode:
+        st.info(
+            "Each processed sample can be logged with your corrected count. "
+            "Use this log to retrain your YOLO base model periodically."
+        )
+
     uploaded_file = st.file_uploader(
         "Upload Image or Video",
         type=["jpg", "png", "mp4", "avi", "mov"],
@@ -176,20 +216,65 @@ def render_shrimp_larvae_detection():
             file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
             image = cv2.imdecode(file_bytes, 1)
             with st.spinner("🦐 Analyzing image..."):
-                annotated_image, summary, shrimp_data = analyze_image(image)
+                annotated_image, summary, shrimp_data, raw_result = analyze_image(
+                    image,
+                    conf_threshold=conf_threshold,
+                    overlap=overlap,
+                    model_id=model_id,
+                )
 
             st.image(annotated_image, channels="BGR", use_container_width=True)
             st.subheader("📊 Summary")
             for key, value in summary.items():
                 st.write(f"**{key}:** {value}")
             st.dataframe(pd.DataFrame(shrimp_data), use_container_width=True)
+
+            if learning_mode:
+                corrected_count = st.number_input(
+                    "Corrected larvae count (manual truth)",
+                    min_value=0,
+                    value=int(summary["Total Count"]),
+                    step=1,
+                    key="corrected_count_image",
+                )
+                notes = st.text_area("What did the model miss?", key="learning_notes_image")
+                if st.button("Save sample for retraining", key="save_learning_image"):
+                    timestamp = int(time.time())
+                    sample_path = Path("data/active_learning") / f"sample_{timestamp}.jpg"
+                    sample_path.parent.mkdir(parents=True, exist_ok=True)
+                    cv2.imwrite(str(sample_path), image)
+                    _log_learning_event(
+                        {
+                            "timestamp": timestamp,
+                            "sample_path": str(sample_path),
+                            "model_id": model_id,
+                            "predicted_count": int(summary["Total Count"]),
+                            "corrected_count": int(corrected_count),
+                            "notes": notes,
+                            "predictions": raw_result.get("predictions", []),
+                        }
+                    )
+                    st.success(
+                        "Sample logged. Retrain your YOLO base model with these hard examples to improve crowded-scene detection."
+                    )
+
+            st.caption(
+                "Tip: true online learning is not available directly in hosted inference. "
+                "Use the saved learning log as an active-learning dataset, then retrain and deploy a new YOLO version."
+            )
             return
 
         temp_video = tempfile.NamedTemporaryFile(delete=False)
         temp_video.write(uploaded_file.read())
         output_path = f"processed_{int(time.time())}.mp4"
         with st.spinner("Shrimp are being analyzed..."):
-            summary = process_video(temp_video.name, output_path)
+            summary = process_video(
+                temp_video.name,
+                output_path,
+                conf_threshold=conf_threshold,
+                overlap=overlap,
+                model_id=model_id,
+            )
 
         st.video(output_path)
         if summary:

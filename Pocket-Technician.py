@@ -46,6 +46,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals()
 DATA_FILE = os.path.join(BASE_DIR, "farm_data.json")
 DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
 USER_LOG_FILE = os.path.join(BASE_DIR, "user_log.json")
+USER_LOG_FILE_ALIASES = [
+    USER_LOG_FILE,
+    os.path.join(BASE_DIR, "userlog.json"),
+    os.path.join(BASE_DIR, "userlog.jason"),
+]
 
 
 SUPPORT_NOTE = (
@@ -58,27 +63,55 @@ def show_support_note():
     st.info(SUPPORT_NOTE)
 
 
-def save_user_log(user_name, location):
-    log_payload = {"users": []}
-    try:
-        if os.path.exists(USER_LOG_FILE):
-            with open(USER_LOG_FILE, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                if isinstance(loaded, dict) and isinstance(loaded.get("users"), list):
-                    log_payload = loaded
-    except Exception:
-        log_payload = {"users": []}
+def _normalize_user_log_payload(loaded):
+    if isinstance(loaded, dict):
+        users = loaded.get("users", [])
+        if isinstance(users, list):
+            return {"users": users}
+    if isinstance(loaded, list):
+        return {"users": loaded}
+    return {"users": []}
 
+
+def load_user_log():
+    for candidate in USER_LOG_FILE_ALIASES:
+        if not os.path.exists(candidate):
+            continue
+        try:
+            with open(candidate, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            return _normalize_user_log_payload(loaded)
+        except (json.JSONDecodeError, OSError):
+            continue
+    return {"users": []}
+
+
+def save_user_log(user_name, location, farm_name="", pond_name=""):
+    """Persist user onboarding information for usage tracking."""
+    cleaned_name = (user_name or "").strip()
+    cleaned_location = (location or "").strip()
+    if not cleaned_name or not cleaned_location:
+        return False
+
+    log_payload = load_user_log()
     log_payload["users"].append(
         {
-            "user_name": user_name,
-            "location": location,
-            "logged_at": datetime.now().isoformat(),
+            "user_name": cleaned_name,
+            "location": cleaned_location,
+            "farm_name": (farm_name or "").strip(),
+            "pond_name": (pond_name or "").strip(),
+            "logged_at": datetime.now().isoformat(timespec="seconds"),
         }
     )
 
-    with open(USER_LOG_FILE, "w", encoding="utf-8") as f:
-        json.dump(log_payload, f, ensure_ascii=False, indent=2)
+    for candidate in USER_LOG_FILE_ALIASES:
+        try:
+            with open(candidate, "w", encoding="utf-8") as f:
+                json.dump(log_payload, f, ensure_ascii=False, indent=2)
+        except OSError:
+            return False
+
+    return True
 
 
 # Reference chart: Count per kg → %Feed → Feed per 100k
@@ -1554,13 +1587,17 @@ if not st.session_state["user_cover_done"]:
             user_submitted = st.form_submit_button("Continue", use_container_width=True)
 
         if user_submitted:
-            if not user_name or not location:
+            clean_user_name = user_name.strip()
+            clean_location = location.strip()
+            if not clean_user_name or not clean_location:
                 st.warning("User Name and Location are required.")
                 st.stop()
 
-            st.session_state["user_name"] = user_name.strip()
-            st.session_state["location"] = location.strip()
-            save_user_log(st.session_state["user_name"], st.session_state["location"])
+            st.session_state["user_name"] = clean_user_name
+            st.session_state["location"] = clean_location
+            if not save_user_log(st.session_state["user_name"], st.session_state["location"]):
+                st.error("Could not save user details to user_log.json. Please check file permissions.")
+                st.stop()
             st.session_state["user_cover_done"] = True
             st.rerun()
 
@@ -1588,11 +1625,13 @@ if not st.session_state["onboarding_done"]:
             submitted = st.form_submit_button("Continue", use_container_width=True)
 
         if submitted:
-            if not farm_name or not pond_name:
+            clean_farm_name = farm_name.strip()
+            clean_pond_name = pond_name.strip()
+            if not clean_farm_name or not clean_pond_name:
                 st.warning("Farm Name and Pond Name are required.")
                 st.stop()
-            st.session_state["farm_name"] = farm_name.strip()
-            st.session_state["pond_name"] = pond_name.strip()
+            st.session_state["farm_name"] = clean_farm_name
+            st.session_state["pond_name"] = clean_pond_name
             st.session_state["mode"] = selected_mode
             st.session_state["onboarding_done"] = True
             st.rerun()
@@ -1623,6 +1662,23 @@ if st.sidebar.button("👤 Change User / Location", use_container_width=True):
     st.session_state["user_cover_done"] = False
     st.session_state["onboarding_done"] = False
     st.rerun()
+
+with st.sidebar.expander("👥 Recent Users", expanded=False):
+    user_log = load_user_log().get("users", [])
+    if user_log:
+        preview_df = pd.DataFrame(user_log[-10:]).iloc[::-1]
+        if "user_name" not in preview_df.columns:
+            preview_df["user_name"] = ""
+        if "location" not in preview_df.columns:
+            preview_df["location"] = ""
+        st.dataframe(
+            preview_df[["user_name", "location"]].rename(
+                columns={"user_name": "User Name", "location": "Location"}
+            ),
+            use_container_width=True,
+        )
+    else:
+        st.caption("No user entries logged yet.")
 
 if st.session_state["mode"] == "Virtual Farm":
     render_virtual_farm(standalone=False)

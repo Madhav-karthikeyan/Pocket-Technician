@@ -56,6 +56,14 @@ def show_support_note():
     st.info(SUPPORT_NOTE)
 
 
+def get_user_name():
+    if "user_name" not in st.session_state:
+        st.session_state["user_name"] = ""
+
+    st.sidebar.text_input("User Name", key="user_name")
+    return st.session_state["user_name"].strip()
+
+
 # Reference chart: Count per kg → %Feed → Feed per 100k
 REFERENCE_FEED_CHART = {
 1000: {"feed_pct": 10.00, "feed_100k": 10.0},
@@ -1509,6 +1517,8 @@ def render_weather_and_lunar(location):
 # =====================================================
 st.set_page_config("Pocket Technician", layout="wide")
 st.title("🦐 Pocket Technician")
+
+user_name = get_user_name()
 
 farm_name = st.sidebar.text_input("Farm Name")
 if farm_name:

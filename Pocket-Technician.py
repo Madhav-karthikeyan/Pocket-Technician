@@ -22,6 +22,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 import sqlite3
 from pages.Virtual_Farm import render_virtual_farm
+from pages.Shrimp_Larvae_Detection import render_shrimp_larvae_detection
 
 
 
@@ -1581,9 +1582,11 @@ if st.session_state["mode"] == "Virtual Farm":
     render_virtual_farm(standalone=False)
     st.stop()
 
-st.markdown("#### Upcoming AI Modules")
+st.markdown("#### AI Modules")
 placeholder_col1, placeholder_col2 = st.columns(2)
-placeholder_col1.info("🧠 **Shrimp Larvae Detection (CNN)**\nReserved for model upload, confidence score, and preview.")
+with placeholder_col1:
+    with st.expander("🧠 Shrimp Larvae Detection (CNN)", expanded=True):
+        render_shrimp_larvae_detection()
 placeholder_col2.info("🧠 **Checktray Analysis (CNN Object Detection)**\nReserved for tray image analytics and recommendation card.")
 
 pond = None

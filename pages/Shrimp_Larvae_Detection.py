@@ -13,6 +13,7 @@ import streamlit as st
 
 DEFAULT_MODEL_ID = "pl-detection-gktye/3"
 DEFAULT_CONF_THRESHOLD = 0.5
+MIN_API_CONFIDENCE = 0.1
 SCALE_MM_PER_PIXEL = 0.02
 FRAME_SKIP = 10
 LEARNING_LOG_PATH = Path("data/larvae_learning_log.jsonl")
@@ -48,7 +49,7 @@ def stage_color(stage):
     return colors.get(stage, (255, 255, 255))
 
 
-def call_roboflow(image, model_id=DEFAULT_MODEL_ID, confidence=DEFAULT_CONF_THRESHOLD, overlap=0.35):
+def call_roboflow(image, model_id=DEFAULT_MODEL_ID, confidence=MIN_API_CONFIDENCE, overlap=0.35):
     import cv2
 
     api_key = _get_api_key()
@@ -78,9 +79,9 @@ def _log_learning_event(event):
 def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=DEFAULT_MODEL_ID):
     import cv2
 
-    result = call_roboflow(image, model_id=model_id, confidence=conf_threshold, overlap=overlap)
+    result = call_roboflow(image, model_id=model_id, confidence=MIN_API_CONFIDENCE, overlap=overlap)
     predictions = result.get("predictions", [])
-    filtered_preds = [p for p in predictions if p["confidence"] > conf_threshold]
+    filtered_preds = [p for p in predictions if p.get("confidence", 0) >= conf_threshold]
 
     total_count = len(filtered_preds)
     image_height, image_width = image.shape[:2]
@@ -179,7 +180,14 @@ def render_shrimp_larvae_detection():
 
     st.markdown("#### Detection Controls")
     model_id = st.text_input("YOLO Model ID", value=DEFAULT_MODEL_ID, help="Roboflow model version, for example project-name/5")
-    conf_threshold = st.slider("Confidence Threshold", min_value=0.1, max_value=0.9, value=DEFAULT_CONF_THRESHOLD, step=0.05)
+    conf_threshold = st.slider(
+        "Confidence Threshold (Shown Detections)",
+        min_value=0.1,
+        max_value=0.9,
+        value=DEFAULT_CONF_THRESHOLD,
+        step=0.05,
+        help="Only detections with confidence greater than or equal to this value are displayed.",
+    )
     overlap = st.slider(
         "Crowded Scene Overlap",
         min_value=0.1,

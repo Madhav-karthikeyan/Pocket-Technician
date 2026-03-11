@@ -291,4 +291,5 @@ if uploaded_file is not None:
                 st.write(f"**{key}:** {value}")
         
 st.divider()
+
 live_camera_mode()

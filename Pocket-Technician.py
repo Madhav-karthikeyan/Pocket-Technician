@@ -46,6 +46,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals()
 DATA_FILE = os.path.join(BASE_DIR, "farm_data.json")
 DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
 USER_LOG_FILE = os.path.join(BASE_DIR, "user_log.json")
+LEGACY_USER_LOG_FILE = os.path.join(BASE_DIR, "user_log.jason")
 
 
 SUPPORT_NOTE = (
@@ -61,8 +62,9 @@ def show_support_note():
 def save_user_log(user_name, location):
     log_payload = {"users": []}
     try:
-        if os.path.exists(USER_LOG_FILE):
-            with open(USER_LOG_FILE, "r", encoding="utf-8") as f:
+        source_file = USER_LOG_FILE if os.path.exists(USER_LOG_FILE) else LEGACY_USER_LOG_FILE
+        if os.path.exists(source_file):
+            with open(source_file, "r", encoding="utf-8") as f:
                 loaded = json.load(f)
                 if isinstance(loaded, dict) and isinstance(loaded.get("users"), list):
                     log_payload = loaded
@@ -78,6 +80,10 @@ def save_user_log(user_name, location):
     )
 
     with open(USER_LOG_FILE, "w", encoding="utf-8") as f:
+        json.dump(log_payload, f, ensure_ascii=False, indent=2)
+
+    # Keep the misspelled legacy filename in sync for existing deployments.
+    with open(LEGACY_USER_LOG_FILE, "w", encoding="utf-8") as f:
         json.dump(log_payload, f, ensure_ascii=False, indent=2)
 
 

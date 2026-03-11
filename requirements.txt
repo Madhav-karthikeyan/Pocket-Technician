@@ -6,4 +6,6 @@ openpyxl
 requests
 astral
 geopy
-opencv2
+opencv-python-headless
+numpy
+

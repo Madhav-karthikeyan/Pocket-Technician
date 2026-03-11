@@ -6,3 +6,4 @@ openpyxl
 requests
 astral
 geopy
+opencv2

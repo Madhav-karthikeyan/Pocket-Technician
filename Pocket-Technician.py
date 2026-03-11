@@ -56,11 +56,12 @@ def show_support_note():
     st.info(SUPPORT_NOTE)
 
 
-def get_user_name():
+def get_user_name(container=None):
     if "user_name" not in st.session_state:
         st.session_state["user_name"] = ""
 
-    st.sidebar.text_input("User Name", key="user_name")
+    input_container = container if container is not None else st
+    input_container.text_input("User Name", key="user_name")
     return st.session_state["user_name"].strip()
 
 
@@ -1518,31 +1519,72 @@ def render_weather_and_lunar(location):
 st.set_page_config("Pocket Technician", layout="wide")
 st.title("🦐 Pocket Technician")
 
-user_name = get_user_name()
-
-farm_name = st.sidebar.text_input("Farm Name")
-if farm_name:
-    data["farms"].setdefault(farm_name, {"ponds": {}})
-
-pond_name = st.sidebar.text_input("Pond Name")
-location = st.sidebar.text_input("Location", "")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader(" Select Mode")
 if "mode" not in st.session_state:
     st.session_state["mode"] = "Technician"
+if "onboarding_done" not in st.session_state:
+    st.session_state["onboarding_done"] = False
 
-btn_col1, btn_col2 = st.sidebar.columns(2)
-if btn_col1.button(" Technician", use_container_width=True):
-    st.session_state["mode"] = "Technician"
-if btn_col2.button("Virtual Farm", use_container_width=True):
-    st.session_state["mode"] = "Virtual Farm"
+if not st.session_state["onboarding_done"]:
+    st.markdown("### Welcome")
+    st.caption("Enter farm details and choose your mode to continue.")
 
-st.sidebar.caption(f"Current mode: **{st.session_state['mode']}**")
+    _, center_panel, _ = st.columns([1, 2, 1])
+    with center_panel:
+        with st.form("farm_setup_form", clear_on_submit=False):
+            user_name = get_user_name()
+            farm_name = st.text_input("Farm Name", key="setup_farm_name")
+            pond_name = st.text_input("Pond Name", key="setup_pond_name")
+            location = st.text_input("Location", "", key="setup_location")
+            selected_mode = st.radio(
+                "Select Mode",
+                options=["Technician", "Virtual Farm"],
+                horizontal=True,
+                key="setup_mode",
+            )
+            submitted = st.form_submit_button("Continue", use_container_width=True)
+
+        if submitted:
+            if not farm_name or not pond_name:
+                st.warning("Farm Name and Pond Name are required.")
+                st.stop()
+            st.session_state["farm_name"] = farm_name.strip()
+            st.session_state["pond_name"] = pond_name.strip()
+            st.session_state["location"] = location.strip()
+            st.session_state["mode"] = selected_mode
+            st.session_state["onboarding_done"] = True
+            st.rerun()
+
+    st.stop()
+
+farm_name = st.session_state.get("farm_name", "")
+pond_name = st.session_state.get("pond_name", "")
+location = st.session_state.get("location", "")
+
+if farm_name:
+    farm_entry = data["farms"].setdefault(farm_name, {"ponds": {}})
+    if location:
+        farm_entry["location"] = location
+    elif farm_entry.get("location"):
+        location = farm_entry["location"]
+
+st.sidebar.subheader("Navigation")
+st.session_state["mode"] = st.sidebar.radio(
+    "Mode",
+    options=["Technician", "Virtual Farm"],
+    index=0 if st.session_state["mode"] == "Technician" else 1,
+)
+if st.sidebar.button("🔁 Change Farm / Pond", use_container_width=True):
+    st.session_state["onboarding_done"] = False
+    st.rerun()
 
 if st.session_state["mode"] == "Virtual Farm":
     render_virtual_farm(standalone=False)
     st.stop()
+
+st.markdown("#### Upcoming AI Modules")
+placeholder_col1, placeholder_col2 = st.columns(2)
+placeholder_col1.info("🧠 **Shrimp Larvae Detection (CNN)**\nReserved for model upload, confidence score, and preview.")
+placeholder_col2.info("🧠 **Checktray Analysis (CNN Object Detection)**\nReserved for tray image analytics and recommendation card.")
 
 pond = None
 
@@ -1563,14 +1605,12 @@ if farm_name and pond_name:
 
     pond = ponds[pond_name]
 
-    # ===== SAFE BACKWARD COMPATIBILITY =====
     pond.setdefault("initial_stock", 0)
     pond.setdefault("area", 0.0)
     pond.setdefault("depth", 0.0)
     pond.setdefault("stocking_date", str(date.today()))
     pond.setdefault("feed_log", [])
     pond.setdefault("sampling_log", [])
-
 
 if pond is None:
     st.stop()
@@ -1599,14 +1639,14 @@ pond["stocking_date"] = st.date_input(
 volume = pond["area"] * pond["depth"]
 st.write(f"Pond Volume: {volume:.2f} m³")
 
-st.info("New: use the **Virtual Farm** page in the sidebar to run culture-level projections and what-if profitability scenarios.")
+st.info("Use the mode selector to switch between Technician and Virtual Farm projections.")
 
 save_data()
 
 if location:
     render_weather_and_lunar(location)
 else:
-    st.info("Enter Location in sidebar to view weather technician recommendations.")
+    st.info("Set location in the setup screen to view weather technician recommendations.")
 
 # Feed
 daily_feed = st.number_input("Feed Given Today (kg)", 0.0)

@@ -34,6 +34,11 @@ def _cv2_available():
   #  return base64.b64decode(HIDDEN_MODEL_ID_B64).decode("utf-8")
 
 
+def _get_model_id():
+    """Return the internal model ID without exposing/editing it in UI controls."""
+    return base64.b64decode(HIDDEN_MODEL_ID_B64).decode("utf-8")
+
+
 def classify_stage(length_mm):
     if length_mm < 10:
         return "Post Larvae"
@@ -81,10 +86,10 @@ def _log_learning_event(event):
         fp.write(json.dumps(event) + "\n")
 
 
-def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=None):
+def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35):
     import cv2
 
-    resolved_model_id = model_id or _get_model_id()
+    resolved_model_id = _get_model_id()
     result = call_roboflow(image, model_id=resolved_model_id, confidence=MIN_API_CONFIDENCE, overlap=overlap)
     predictions = result.get("predictions", [])
     filtered_preds = [p for p in predictions if p.get("confidence", 0) >= conf_threshold]
@@ -141,7 +146,7 @@ def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, mo
     return image, summary, shrimp_data, result
 
 
-def process_video(video_path, output_path, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=None):
+def process_video(video_path, output_path, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35):
     import cv2
 
     cap = cv2.VideoCapture(video_path)
@@ -164,7 +169,6 @@ def process_video(video_path, output_path, conf_threshold=DEFAULT_CONF_THRESHOLD
                 frame,
                 conf_threshold=conf_threshold,
                 overlap=overlap,
-                model_id=model_id,
             )
             final_summary = summary
             out.write(annotated_frame)
@@ -185,7 +189,6 @@ def render_shrimp_larvae_detection():
         return
 
     st.markdown("#### Detection Controls")
-    model_id = _get_model_id()
     conf_threshold = st.slider(
         "Confidence Threshold (Shown Detections)",
         min_value=0.1,
@@ -234,7 +237,6 @@ def render_shrimp_larvae_detection():
                     image,
                     conf_threshold=conf_threshold,
                     overlap=overlap,
-                    model_id=model_id,
                 )
 
             st.image(annotated_image, channels="BGR", use_container_width=True)
@@ -286,7 +288,6 @@ def render_shrimp_larvae_detection():
                 output_path,
                 conf_threshold=conf_threshold,
                 overlap=overlap,
-                model_id=model_id,
             )
 
         st.video(output_path)

@@ -1,5 +1,6 @@
 import streamlit as st
-import json, os
+import json
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import date, datetime
@@ -44,12 +45,17 @@ def get_moon_name(phase):
 # =====================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
 DATA_FILE = os.path.join(BASE_DIR, "farm_data.json")
+DATA_FILE_ALIASES = [
+    DATA_FILE,
+    os.path.join(BASE_DIR, "farm_data.json"),
+]
 DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
 USER_LOG_FILE = os.path.join(BASE_DIR, "user_log.json")
 USER_LOG_FILE_ALIASES = [
     USER_LOG_FILE,
+    os.path.join(BASE_DIR, "user_log.json"),
     os.path.join(BASE_DIR, "userlog.json"),
-    os.path.join(BASE_DIR, "userlog.jason"),
+    os.path.join(BASE_DIR, "userlog.json"),
 ]
 
 
@@ -104,14 +110,19 @@ def save_user_log(user_name, location, farm_name="", pond_name=""):
         }
     )
 
+    write_ok = False
     for candidate in USER_LOG_FILE_ALIASES:
         try:
             with open(candidate, "w", encoding="utf-8") as f:
                 json.dump(log_payload, f, ensure_ascii=False, indent=2)
+            if candidate == USER_LOG_FILE:
+                write_ok = True
         except OSError:
-            return False
+            # Alias writes are best-effort; keep primary file as source of truth.
+            if candidate == USER_LOG_FILE:
+                return False
 
-    return True
+    return write_ok
 
 
 # Reference chart: Count per kg → %Feed → Feed per 100k
@@ -1100,12 +1111,13 @@ def _default_data():
 
 
 def _write_json_backup(payload):
-    try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=4)
-    except Exception:
-        # Backup write should never block primary DB save.
-        pass
+    for candidate in DATA_FILE_ALIASES:
+        try:
+            with open(candidate, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=4)
+        except Exception:
+            # Backup write should never block primary DB save.
+            pass
 
 
 def _get_db_connection():
@@ -1130,7 +1142,8 @@ def _ensure_db():
 
 
 def _migrate_json_to_db_if_needed():
-    if not os.path.exists(DATA_FILE):
+    source_file = next((path for path in DATA_FILE_ALIASES if os.path.exists(path)), None)
+    if not source_file:
         return
     try:
         with _get_db_connection() as conn:
@@ -1138,7 +1151,7 @@ def _migrate_json_to_db_if_needed():
             if row:
                 return
 
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
+        with open(source_file, "r", encoding="utf-8") as f:
             data = json.load(f)
             if not isinstance(data, dict):
                 data = _default_data()
@@ -1803,6 +1816,7 @@ if "pending_sampling" in st.session_state:
     if st.button("💾 Save Sampling Record"):
 
         pond["sampling_log"].append(st.session_state["pending_sampling"])
+        save_data()
 
         st.success("Sampling saved successfully!")
 

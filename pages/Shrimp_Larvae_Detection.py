@@ -23,10 +23,10 @@ def _cv2_available():
     return importlib.util.find_spec("cv2") is not None
 
 
-def _get_api_key():
-    if "ROBOFLOW_API_KEY" in st.secrets:
-        return st.secrets["ROBOFLOW_API_KEY"]
-    return os.getenv("ROBOFLOW_API_KEY", "kjIdDMpGigBba7txLaog")
+#def _get_api_key():
+ #   if "ROBOFLOW_API_KEY" in st.secrets:
+  #      return st.secrets["ROBOFLOW_API_KEY"]
+   # return os.getenv("ROBOFLOW_API_KEY", "kjIdDMpGigBba7txLaog")
 
 
 #def _get_model_id():

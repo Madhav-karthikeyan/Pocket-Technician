@@ -1669,22 +1669,7 @@ if st.sidebar.button("👤 Change User / Location", use_container_width=True):
     st.session_state["onboarding_done"] = False
     st.rerun()
 
-with st.sidebar.expander("👥 Recent Users", expanded=False):
-    user_log = load_user_log().get("users", [])
-    if user_log:
-        preview_df = pd.DataFrame(user_log[-10:]).iloc[::-1]
-        if "user_name" not in preview_df.columns:
-            preview_df["user_name"] = ""
-        if "location" not in preview_df.columns:
-            preview_df["location"] = ""
-        st.dataframe(
-            preview_df[["user_name", "location"]].rename(
-                columns={"user_name": "User Name", "location": "Location"}
-            ),
-            use_container_width=True,
-        )
-    else:
-        st.caption("No user entries logged yet.")
+st.sidebar.caption("👥 User entries are logged privately to user_log.json.")
 
 if st.session_state["mode"] == "Virtual Farm":
     render_virtual_farm(standalone=False)

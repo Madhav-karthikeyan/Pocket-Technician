@@ -47,15 +47,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals()
 DATA_FILE = os.path.join(BASE_DIR, "farm_data.json")
 DATA_FILE_ALIASES = [
     DATA_FILE,
-    os.path.join(BASE_DIR, "farm_data.jason"),
+    os.path.join(BASE_DIR, "farm_data.json"),
 ]
 DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
 USER_LOG_FILE = os.path.join(BASE_DIR, "user_log.json")
 USER_LOG_FILE_ALIASES = [
     USER_LOG_FILE,
-    os.path.join(BASE_DIR, "user_log.jason"),
+    os.path.join(BASE_DIR, "user_log.json"),
     os.path.join(BASE_DIR, "userlog.json"),
-    os.path.join(BASE_DIR, "userlog.jason"),
+    os.path.join(BASE_DIR, "userlog.json"),
 ]
 
 

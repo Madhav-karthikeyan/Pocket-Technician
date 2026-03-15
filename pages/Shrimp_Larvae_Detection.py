@@ -16,6 +16,7 @@ MIN_API_CONFIDENCE = 0.1
 SCALE_MM_PER_PIXEL = 0.02
 FRAME_SKIP = 10
 LEARNING_LOG_PATH = Path("data/larvae_learning_log.jsonl")
+HIDDEN_MODEL_ID_B64 = "cGwtZGV0ZWN0aW9uLWdrdHllLzM="
 
 
 def _cv2_available():
@@ -29,9 +30,8 @@ def _get_api_key():
 
 
 def _get_model_id():
-    if "ROBOFLOW_MODEL_ID" in st.secrets:
-        return st.secrets["ROBOFLOW_MODEL_ID"]
-    return os.getenv("ROBOFLOW_MODEL_ID")
+    """Return the internal model ID without exposing/editing it in UI controls."""
+    return base64.b64decode(HIDDEN_MODEL_ID_B64).decode("utf-8")
 
 
 def classify_stage(length_mm):
@@ -85,8 +85,6 @@ def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, mo
     import cv2
 
     resolved_model_id = model_id or _get_model_id()
-    if not resolved_model_id:
-        raise RuntimeError("Missing ROBOFLOW_MODEL_ID. Configure it in Streamlit secrets or environment variables.")
     result = call_roboflow(image, model_id=resolved_model_id, confidence=MIN_API_CONFIDENCE, overlap=overlap)
     predictions = result.get("predictions", [])
     filtered_preds = [p for p in predictions if p.get("confidence", 0) >= conf_threshold]
@@ -188,9 +186,6 @@ def render_shrimp_larvae_detection():
 
     st.markdown("#### Detection Controls")
     model_id = _get_model_id()
-    if not model_id:
-        st.error("Missing Roboflow model configuration. Set ROBOFLOW_MODEL_ID in Streamlit secrets or env vars.")
-        return
     conf_threshold = st.slider(
         "Confidence Threshold (Shown Detections)",
         min_value=0.1,

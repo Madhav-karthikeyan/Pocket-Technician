@@ -11,7 +11,6 @@ import pandas as pd
 import requests
 import streamlit as st
 
-DEFAULT_MODEL_ID = "pl-detection-gktye/3"
 DEFAULT_CONF_THRESHOLD = 0.5
 MIN_API_CONFIDENCE = 0.1
 SCALE_MM_PER_PIXEL = 0.02
@@ -27,6 +26,12 @@ def _get_api_key():
     if "ROBOFLOW_API_KEY" in st.secrets:
         return st.secrets["ROBOFLOW_API_KEY"]
     return os.getenv("ROBOFLOW_API_KEY", "kjIdDMpGigBba7txLaog")
+
+
+def _get_model_id():
+    if "ROBOFLOW_MODEL_ID" in st.secrets:
+        return st.secrets["ROBOFLOW_MODEL_ID"]
+    return os.getenv("ROBOFLOW_MODEL_ID")
 
 
 def classify_stage(length_mm):
@@ -49,7 +54,7 @@ def stage_color(stage):
     return colors.get(stage, (255, 255, 255))
 
 
-def call_roboflow(image, model_id=DEFAULT_MODEL_ID, confidence=MIN_API_CONFIDENCE, overlap=0.35):
+def call_roboflow(image, model_id, confidence=MIN_API_CONFIDENCE, overlap=0.35):
     import cv2
 
     api_key = _get_api_key()
@@ -76,10 +81,13 @@ def _log_learning_event(event):
         fp.write(json.dumps(event) + "\n")
 
 
-def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=DEFAULT_MODEL_ID):
+def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=None):
     import cv2
 
-    result = call_roboflow(image, model_id=model_id, confidence=MIN_API_CONFIDENCE, overlap=overlap)
+    resolved_model_id = model_id or _get_model_id()
+    if not resolved_model_id:
+        raise RuntimeError("Missing ROBOFLOW_MODEL_ID. Configure it in Streamlit secrets or environment variables.")
+    result = call_roboflow(image, model_id=resolved_model_id, confidence=MIN_API_CONFIDENCE, overlap=overlap)
     predictions = result.get("predictions", [])
     filtered_preds = [p for p in predictions if p.get("confidence", 0) >= conf_threshold]
 
@@ -135,7 +143,7 @@ def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, mo
     return image, summary, shrimp_data, result
 
 
-def process_video(video_path, output_path, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=DEFAULT_MODEL_ID):
+def process_video(video_path, output_path, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35, model_id=None):
     import cv2
 
     cap = cv2.VideoCapture(video_path)
@@ -179,7 +187,10 @@ def render_shrimp_larvae_detection():
         return
 
     st.markdown("#### Detection Controls")
-    model_id = DEFAULT_MODEL_ID
+    model_id = _get_model_id()
+    if not model_id:
+        st.error("Missing Roboflow model configuration. Set ROBOFLOW_MODEL_ID in Streamlit secrets or env vars.")
+        return
     conf_threshold = st.slider(
         "Confidence Threshold (Shown Detections)",
         min_value=0.1,
@@ -255,7 +266,6 @@ def render_shrimp_larvae_detection():
                         {
                             "timestamp": timestamp,
                             "sample_path": str(sample_path),
-                            "model_id": model_id,
                             "predicted_count": int(summary["Total Count"]),
                             "corrected_count": int(corrected_count),
                             "notes": notes,

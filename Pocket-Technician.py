@@ -94,12 +94,20 @@ def load_user_log():
 
 def save_user_log(user_name, location, farm_name="", pond_name=""):
     """Persist user onboarding information for usage tracking."""
+    log_payload = load_user_log()
     cleaned_name = (user_name or "").strip()
     cleaned_location = (location or "").strip()
+
+    # Allow farm/pond enrichment even if the second step does not resend
+    # user/location values in the current Streamlit session.
+    if (not cleaned_name or not cleaned_location) and log_payload["users"]:
+        last_user = log_payload["users"][-1]
+        cleaned_name = cleaned_name or (last_user.get("user_name", "").strip())
+        cleaned_location = cleaned_location or (last_user.get("location", "").strip())
+
     if not cleaned_name or not cleaned_location:
         return False
 
-    log_payload = load_user_log()
     log_payload["users"].append(
         {
             "user_name": cleaned_name,
@@ -1646,12 +1654,14 @@ if not st.session_state["onboarding_done"]:
             st.session_state["farm_name"] = clean_farm_name
             st.session_state["pond_name"] = clean_pond_name
             st.session_state["mode"] = selected_mode
-            save_user_log(
+            if not save_user_log(
                 st.session_state.get("user_name", ""),
                 st.session_state.get("location", ""),
                 farm_name=st.session_state["farm_name"],
                 pond_name=st.session_state["pond_name"],
-            )
+            ):
+                st.error("Could not save farm onboarding details to user_log.json. Please check file permissions.")
+                st.stop()
             st.session_state["onboarding_done"] = True
             st.rerun()
 
@@ -1667,6 +1677,9 @@ if farm_name:
         farm_entry["location"] = location
     elif farm_entry.get("location"):
         location = farm_entry["location"]
+    user_name = st.session_state.get("user_name", "").strip()
+    if user_name:
+        farm_entry["user_name"] = user_name
 
 st.sidebar.subheader("Navigation")
 st.session_state["mode"] = st.sidebar.selectbox(

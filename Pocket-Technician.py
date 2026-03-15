@@ -1672,14 +1672,27 @@ pond_name = st.session_state.get("pond_name", "")
 location = st.session_state.get("location", "")
 
 if farm_name:
+    farm_exists = farm_name in data["farms"]
     farm_entry = data["farms"].setdefault(farm_name, {"ponds": {}})
+    farm_context_changed = not farm_exists
+
     if location:
-        farm_entry["location"] = location
+        if farm_entry.get("location") != location:
+            farm_entry["location"] = location
+            farm_context_changed = True
     elif farm_entry.get("location"):
         location = farm_entry["location"]
     user_name = st.session_state.get("user_name", "").strip()
     if user_name:
         farm_entry["user_name"] = user_name
+
+    user_name = st.session_state.get("user_name", "").strip()
+    if user_name and farm_entry.get("user_name") != user_name:
+        farm_entry["user_name"] = user_name
+        farm_context_changed = True
+
+    if farm_context_changed:
+        save_data()
 
 st.sidebar.subheader("Navigation")
 st.session_state["mode"] = st.sidebar.selectbox(

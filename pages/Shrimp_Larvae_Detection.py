@@ -29,9 +29,9 @@ def _get_api_key():
     return os.getenv("ROBOFLOW_API_KEY", "kjIdDMpGigBba7txLaog")
 
 
-def _get_model_id():
-    """Return the internal model ID without exposing/editing it in UI controls."""
-    return base64.b64decode(HIDDEN_MODEL_ID_B64).decode("utf-8")
+#def _get_model_id():
+ #   """Return the internal model ID without exposing/editing it in UI controls."""
+  #  return base64.b64decode(HIDDEN_MODEL_ID_B64).decode("utf-8")
 
 
 def classify_stage(length_mm):

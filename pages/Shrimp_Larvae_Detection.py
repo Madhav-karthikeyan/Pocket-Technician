@@ -179,7 +179,7 @@ def render_shrimp_larvae_detection():
         return
 
     st.markdown("#### Detection Controls")
-    model_id = st.text_input("YOLO Model ID", value=DEFAULT_MODEL_ID, help="Roboflow model version, for example project-name/5")
+    model_id = DEFAULT_MODEL_ID
     conf_threshold = st.slider(
         "Confidence Threshold (Shown Detections)",
         min_value=0.1,

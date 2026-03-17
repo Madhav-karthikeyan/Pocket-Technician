@@ -23,15 +23,15 @@ def _cv2_available():
     return importlib.util.find_spec("cv2") is not None
 
 
-#def _get_api_key():
- #   if "ROBOFLOW_API_KEY" in st.secrets:
-  #      return st.secrets["ROBOFLOW_API_KEY"]
-   # return os.getenv("ROBOFLOW_API_KEY", "kjIdDMpGigBba7txLaog")
+def _get_api_key():
+    if "ROBOFLOW_API_KEY" in st.secrets:
+       return st.secrets["ROBOFLOW_API_KEY"]
+    return os.getenv("ROBOFLOW_API_KEY", "kjIdDMpGigBba7txLaog")
 
 
-#def _get_model_id():
- #   """Return the internal model ID without exposing/editing it in UI controls."""
-  #  return base64.b64decode(HIDDEN_MODEL_ID_B64).decode("utf-8")
+def _get_model_id():
+   """Return the internal model ID without exposing/editing it in UI controls."""
+    return base64.b64decode(HIDDEN_MODEL_ID_B64).decode("utf-8")
 
 
 def _get_model_id():

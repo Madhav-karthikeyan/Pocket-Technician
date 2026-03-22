@@ -15,6 +15,8 @@ DEFAULT_CONF_THRESHOLD = 0.5
 MIN_API_CONFIDENCE = 0.1
 SCALE_MM_PER_PIXEL = 0.02
 FRAME_SKIP = 10
+DEFAULT_MAX_DETECTIONS = 1200
+DEFAULT_MERGE_DISTANCE_PX = 12
 LEARNING_LOG_PATH = Path("data/larvae_learning_log.jsonl")
 HIDDEN_MODEL_ID_B64 = "cGwtZGV0ZWN0aW9uLWdrdHllLzM="
 
@@ -25,7 +27,7 @@ def _cv2_available():
 
 def _get_api_key():
     if "ROBOFLOW_API_KEY" in st.secrets:
-       return st.secrets["ROBOFLOW_API_KEY"]
+        return st.secrets["ROBOFLOW_API_KEY"]
     return os.getenv("ROBOFLOW_API_KEY", "kjIdDMpGigBba7txLaog")
 
 
@@ -54,7 +56,13 @@ def stage_color(stage):
     return colors.get(stage, (255, 255, 255))
 
 
-def call_roboflow(image, model_id, confidence=MIN_API_CONFIDENCE, overlap=0.35):
+def call_roboflow(
+    image,
+    model_id,
+    confidence=MIN_API_CONFIDENCE,
+    overlap=0.35,
+    max_detections=DEFAULT_MAX_DETECTIONS,
+):
     import cv2
 
     api_key = _get_api_key()
@@ -63,7 +71,10 @@ def call_roboflow(image, model_id, confidence=MIN_API_CONFIDENCE, overlap=0.35):
 
     url = (
         f"https://serverless.roboflow.com/{model_id}"
-        f"?api_key={api_key}&confidence={int(confidence * 100)}&overlap={int(overlap * 100)}"
+        f"?api_key={api_key}"
+        f"&confidence={int(confidence * 100)}"
+        f"&overlap={int(overlap * 100)}"
+        f"&max_detections={int(max_detections)}"
     )
     response = requests.post(
         url,
@@ -75,18 +86,85 @@ def call_roboflow(image, model_id, confidence=MIN_API_CONFIDENCE, overlap=0.35):
     return response.json()
 
 
+def _enhance_for_blurry_shrimp(image):
+    import cv2
+
+    denoised = cv2.bilateralFilter(image, d=7, sigmaColor=50, sigmaSpace=50)
+
+    lab = cv2.cvtColor(denoised, cv2.COLOR_BGR2LAB)
+    l_chan, a_chan, b_chan = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+    l_enhanced = clahe.apply(l_chan)
+    enhanced = cv2.cvtColor(cv2.merge((l_enhanced, a_chan, b_chan)), cv2.COLOR_LAB2BGR)
+
+    blurred = cv2.GaussianBlur(enhanced, (0, 0), 1.6)
+    sharpened = cv2.addWeighted(enhanced, 1.6, blurred, -0.6, 0)
+    return sharpened
+
+
+def _prediction_center(pred):
+    return float(pred["x"]), float(pred["y"])
+
+
+def _merge_predictions(predictions, distance_px=DEFAULT_MERGE_DISTANCE_PX):
+    """Merge near-duplicate detections from multi-pass inference."""
+    merged = []
+    for pred in sorted(predictions, key=lambda p: p.get("confidence", 0), reverse=True):
+        px, py = _prediction_center(pred)
+        duplicate_idx = None
+        for i, keep in enumerate(merged):
+            kx, ky = _prediction_center(keep)
+            if np.hypot(px - kx, py - ky) <= distance_px:
+                duplicate_idx = i
+                break
+        if duplicate_idx is None:
+            merged.append(pred)
+            continue
+        if pred.get("confidence", 0) > merged[duplicate_idx].get("confidence", 0):
+            merged[duplicate_idx] = pred
+    return merged
+
+
 def _log_learning_event(event):
     LEARNING_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LEARNING_LOG_PATH.open("a", encoding="utf-8") as fp:
         fp.write(json.dumps(event) + "\n")
 
 
-def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35):
+def analyze_image(
+    image,
+    conf_threshold=DEFAULT_CONF_THRESHOLD,
+    overlap=0.35,
+    max_detections=DEFAULT_MAX_DETECTIONS,
+    blurry_assist=True,
+    merge_distance_px=DEFAULT_MERGE_DISTANCE_PX,
+):
     import cv2
 
     resolved_model_id = _get_model_id()
-    result = call_roboflow(image, model_id=resolved_model_id, confidence=MIN_API_CONFIDENCE, overlap=overlap)
-    predictions = result.get("predictions", [])
+    base_result = call_roboflow(
+        image,
+        model_id=resolved_model_id,
+        confidence=MIN_API_CONFIDENCE,
+        overlap=overlap,
+        max_detections=max_detections,
+    )
+
+    predictions = list(base_result.get("predictions", []))
+    blur_result = {"predictions": []}
+
+    if blurry_assist:
+        enhanced_image = _enhance_for_blurry_shrimp(image)
+        blur_result = call_roboflow(
+            enhanced_image,
+            model_id=resolved_model_id,
+            confidence=MIN_API_CONFIDENCE,
+            overlap=overlap,
+            max_detections=max_detections,
+        )
+        predictions.extend(blur_result.get("predictions", []))
+
+    predictions = _merge_predictions(predictions, distance_px=merge_distance_px)
     filtered_preds = [p for p in predictions if p.get("confidence", 0) >= conf_threshold]
 
     total_count = len(filtered_preds)
@@ -111,18 +189,22 @@ def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35):
         relative_size = (length_mm / avg_size * 100) if avg_size > 0 else 0
         population_share = (1 / total_count * 100) if total_count > 0 else 0
 
-        shrimp_data.append({
-            "Tag ID": idx + 1,
-            "Length (mm)": round(length_mm, 2),
-            "Stage": stage,
-            "Confidence": round(p["confidence"], 3),
-            "Relative Size (%)": round(relative_size, 1),
-            "Population Share (%)": round(population_share, 2),
-        })
+        shrimp_data.append(
+            {
+                "Tag ID": idx + 1,
+                "Length (mm)": round(length_mm, 2),
+                "Stage": stage,
+                "Confidence": round(p["confidence"], 3),
+                "Relative Size (%)": round(relative_size, 1),
+                "Population Share (%)": round(population_share, 2),
+            }
+        )
 
         color = stage_color(stage)
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
         cv2.putText(image, f"ID:{idx + 1} | {stage}", (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+        # Red centroid dots requested for count visualization.
+        cv2.circle(image, (x, y), 4, (0, 0, 255), -1)
 
     avg_confidence = np.mean([p["confidence"] for p in filtered_preds]) if filtered_preds else 0
     density = total_count / image_area if image_area > 0 else 0
@@ -137,11 +219,22 @@ def analyze_image(image, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35):
         "Average Size (mm)": round(avg_size, 2),
         "Density (pixel-based)": round(density, 6),
         "Stage Distribution": stage_distribution,
+        "Raw API Detections": len(base_result.get("predictions", [])),
+        "Blur Assist Detections": len(blur_result.get("predictions", [])) if blurry_assist else 0,
+        "Merged Detections": len(predictions),
     }
-    return image, summary, shrimp_data, result
+    return image, summary, shrimp_data, base_result
 
 
-def process_video(video_path, output_path, conf_threshold=DEFAULT_CONF_THRESHOLD, overlap=0.35):
+def process_video(
+    video_path,
+    output_path,
+    conf_threshold=DEFAULT_CONF_THRESHOLD,
+    overlap=0.35,
+    max_detections=DEFAULT_MAX_DETECTIONS,
+    blurry_assist=True,
+    merge_distance_px=DEFAULT_MERGE_DISTANCE_PX,
+):
     import cv2
 
     cap = cv2.VideoCapture(video_path)
@@ -164,6 +257,9 @@ def process_video(video_path, output_path, conf_threshold=DEFAULT_CONF_THRESHOLD
                 frame,
                 conf_threshold=conf_threshold,
                 overlap=overlap,
+                max_detections=max_detections,
+                blurry_assist=blurry_assist,
+                merge_distance_px=merge_distance_px,
             )
             final_summary = summary
             out.write(annotated_frame)
@@ -200,6 +296,27 @@ def render_shrimp_larvae_detection():
         step=0.05,
         help="Higher overlap helps retain neighboring larvae in dense images.",
     )
+    max_detections = st.slider(
+        "Maximum Detections per Frame",
+        min_value=300,
+        max_value=2000,
+        value=DEFAULT_MAX_DETECTIONS,
+        step=50,
+        help="Increase this above 300 for dense larval samples.",
+    )
+    blurry_assist = st.toggle(
+        "Blurry Shrimp Assist",
+        value=True,
+        help="Runs a second pass with contrast + sharpening to recover soft/blurry larvae.",
+    )
+    merge_distance_px = st.slider(
+        "Duplicate Merge Distance (px)",
+        min_value=4,
+        max_value=30,
+        value=DEFAULT_MERGE_DISTANCE_PX,
+        step=1,
+        help="Combine nearby detections from normal + blurry-assist passes.",
+    )
     learning_mode = st.toggle(
         "Active Learning Mode",
         value=False,
@@ -232,9 +349,17 @@ def render_shrimp_larvae_detection():
                     image,
                     conf_threshold=conf_threshold,
                     overlap=overlap,
+                    max_detections=max_detections,
+                    blurry_assist=blurry_assist,
+                    merge_distance_px=merge_distance_px,
                 )
 
             st.image(annotated_image, channels="BGR", use_container_width=True)
+            if summary["Raw API Detections"] >= max_detections:
+                st.warning(
+                    "The base API pass reached the max detection limit. "
+                    "Increase 'Maximum Detections per Frame' for denser larval images."
+                )
             st.subheader("📊 Summary")
             for key, value in summary.items():
                 st.write(f"**{key}:** {value}")
@@ -283,6 +408,9 @@ def render_shrimp_larvae_detection():
                 output_path,
                 conf_threshold=conf_threshold,
                 overlap=overlap,
+                max_detections=max_detections,
+                blurry_assist=blurry_assist,
+                merge_distance_px=merge_distance_px,
             )
 
         st.video(output_path)

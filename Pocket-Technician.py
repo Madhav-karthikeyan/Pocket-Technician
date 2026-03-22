@@ -92,6 +92,33 @@ def load_user_log():
     return {"users": []}
 
 
+def get_latest_saved_context():
+    """Return the most recent non-empty onboarding details from user_log.json."""
+    latest_user_name = ""
+    latest_location = ""
+    latest_farm_name = ""
+    latest_pond_name = ""
+
+    for entry in reversed(load_user_log().get("users", [])):
+        if not latest_user_name:
+            latest_user_name = (entry.get("user_name", "") or "").strip()
+        if not latest_location:
+            latest_location = (entry.get("location", "") or "").strip()
+        if not latest_farm_name:
+            latest_farm_name = (entry.get("farm_name", "") or "").strip()
+        if not latest_pond_name:
+            latest_pond_name = (entry.get("pond_name", "") or "").strip()
+        if latest_user_name and latest_location and latest_farm_name and latest_pond_name:
+            break
+
+    return {
+        "user_name": latest_user_name,
+        "location": latest_location,
+        "farm_name": latest_farm_name,
+        "pond_name": latest_pond_name,
+    }
+
+
 def save_user_log(user_name, location, farm_name="", pond_name=""):
     """Persist user onboarding information for usage tracking."""
     log_payload = load_user_log()
@@ -1595,6 +1622,37 @@ if "user_cover_done" not in st.session_state:
     st.session_state["user_cover_done"] = False
 if "onboarding_done" not in st.session_state:
     st.session_state["onboarding_done"] = False
+if "allow_saved_user_autoload" not in st.session_state:
+    st.session_state["allow_saved_user_autoload"] = True
+if "allow_saved_farm_autoload" not in st.session_state:
+    st.session_state["allow_saved_farm_autoload"] = True
+
+saved_context = get_latest_saved_context()
+if (
+    st.session_state["allow_saved_user_autoload"]
+    and not st.session_state["user_cover_done"]
+    and saved_context["user_name"]
+    and saved_context["location"]
+):
+    st.session_state["user_name"] = saved_context["user_name"]
+    st.session_state["location"] = saved_context["location"]
+    st.session_state["cover_user_name"] = saved_context["user_name"]
+    st.session_state["cover_location"] = saved_context["location"]
+    st.session_state["user_cover_done"] = True
+    st.session_state["allow_saved_user_autoload"] = False
+if (
+    st.session_state["allow_saved_farm_autoload"]
+    and st.session_state["user_cover_done"]
+    and not st.session_state["onboarding_done"]
+    and saved_context["farm_name"]
+    and saved_context["pond_name"]
+):
+    st.session_state["farm_name"] = saved_context["farm_name"]
+    st.session_state["pond_name"] = saved_context["pond_name"]
+    st.session_state["setup_farm_name"] = saved_context["farm_name"]
+    st.session_state["setup_pond_name"] = saved_context["pond_name"]
+    st.session_state["onboarding_done"] = True
+    st.session_state["allow_saved_farm_autoload"] = False
 
 if not st.session_state["user_cover_done"]:
     st.markdown("### Thank you for using Pocket Technician 🙏")
@@ -1620,6 +1678,7 @@ if not st.session_state["user_cover_done"]:
                 st.error("Could not save user details to user_log.json. Please check file permissions.")
                 st.stop()
             st.session_state["user_cover_done"] = True
+            st.session_state["allow_saved_user_autoload"] = False
             st.rerun()
 
     st.stop()
@@ -1663,6 +1722,7 @@ if not st.session_state["onboarding_done"]:
                 st.error("Could not save farm onboarding details to user_log.json. Please check file permissions.")
                 st.stop()
             st.session_state["onboarding_done"] = True
+            st.session_state["allow_saved_farm_autoload"] = False
             st.rerun()
 
     st.stop()
@@ -1702,10 +1762,19 @@ st.session_state["mode"] = st.sidebar.selectbox(
 )
 if st.sidebar.button("🔁 Change Farm / Pond", use_container_width=True):
     st.session_state["onboarding_done"] = False
+    st.session_state["allow_saved_farm_autoload"] = False
+    st.session_state["setup_farm_name"] = ""
+    st.session_state["setup_pond_name"] = ""
     st.rerun()
 if st.sidebar.button("👤 Change User / Location", use_container_width=True):
     st.session_state["user_cover_done"] = False
     st.session_state["onboarding_done"] = False
+    st.session_state["allow_saved_user_autoload"] = False
+    st.session_state["allow_saved_farm_autoload"] = False
+    st.session_state["cover_user_name"] = ""
+    st.session_state["cover_location"] = ""
+    st.session_state["setup_farm_name"] = ""
+    st.session_state["setup_pond_name"] = ""
     st.rerun()
 
 st.sidebar.caption("👥 User entries are logged privately to user_log.json.")

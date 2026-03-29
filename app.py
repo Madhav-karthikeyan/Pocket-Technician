@@ -1,17 +1,29 @@
-import datetime
-import os
-import random
-import time
-
 import streamlit as st
+import time
+import datetime
+import random
+import os
+from pathlib import Path
+import base64
 
 st.set_page_config(page_title="Kulffi ❤️", layout="wide")
+
+# ---------- HIDE STREAMLIT UI ----------
+st.markdown("""
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+html {
+    scroll-behavior: smooth;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ---------- SESSION ----------
 if "unlocked" not in st.session_state:
     st.session_state.unlocked = False
-if "intro_done" not in st.session_state:
-    st.session_state.intro_done = False
 
 # ---------- PASSWORD ----------
 if not st.session_state.unlocked:
@@ -24,31 +36,108 @@ if not st.session_state.unlocked:
     else:
         st.stop()
 
-# ---------- INTRO ----------
-if not st.session_state.intro_done:
-    st.markdown(
-        """
-    <div style="height:100vh; display:flex; justify-content:center; align-items:center;
-    background:black; color:white; font-size:40px; text-align:center;">
-    This isn't just an app… 💫<br><br>
-    It's our story ❤️
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-    time.sleep(3)
-    st.session_state.intro_done = True
-    st.rerun()
-
 # ---------- DATES ----------
 start_date = datetime.date(2023, 5, 1)
 days_together = (datetime.date.today() - start_date).days
-
+# ---------- ROMANTIC GLOWING CLOCK ----------
 start_clock = datetime.datetime(2018, 2, 21, 0, 0, 0)
 start_clock_js = start_clock.strftime("%Y-%m-%dT%H:%M:%S")
 
-# More hearts over time (grows with months passed)
+clock_html = f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;600&display=swap');
+
+.clock-container {{
+    text-align: center;
+    margin-top: 50px;
+    font-family: 'Poppins', sans-serif;
+}}
+
+.clock-title {{
+    font-size: 20px;
+    color: #ff9ab0;
+    margin-bottom: 15px;
+    letter-spacing: 1px;
+}}
+
+.clock-box {{
+    display: inline-block;
+    padding: 20px 30px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #ff4b6e, #ff8fa3, #ff4b6e);
+    color: white;
+    font-size: 42px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    box-shadow: 0 0 20px rgba(255, 75, 110, 0.6),
+                0 0 40px rgba(255, 75, 110, 0.4),
+                0 0 60px rgba(255, 75, 110, 0.2);
+    animation: glowPulse 2.5s infinite ease-in-out, heartbeat 1.8s infinite;
+}}
+
+@keyframes glowPulse {{
+    0% {{
+        box-shadow: 0 0 10px rgba(255,75,110,0.4),
+                    0 0 20px rgba(255,75,110,0.3);
+    }}
+    50% {{
+        box-shadow: 0 0 30px rgba(255,75,110,0.8),
+                    0 0 60px rgba(255,75,110,0.5);
+    }}
+    100% {{
+        box-shadow: 0 0 10px rgba(255,75,110,0.4),
+                    0 0 20px rgba(255,75,110,0.3);
+    }}
+}}
+
+@keyframes heartbeat {{
+    0%, 100% {{ transform: scale(1); }}
+    25% {{ transform: scale(1.05); }}
+    50% {{ transform: scale(1); }}
+    75% {{ transform: scale(1.05); }}
+}}
+</style>
+
+<div class="clock-container">
+    <div class="clock-title">⏳ Our Time Since Feb 21, 2018 ❤️</div>
+    <div id="romantic-clock" class="clock-box">Loading...</div>
+</div>
+
+<script>
+const startTime = new Date("{start_clock_js}").getTime();
+
+function updateClock() {{
+    const now = new Date().getTime();
+    let diff = Math.floor((now - startTime) / 1000);
+
+    const years = Math.floor(diff / (365 * 24 * 3600));
+    diff -= years * 365 * 24 * 3600;
+
+    const days = Math.floor(diff / (24 * 3600));
+    diff -= days * 24 * 3600;
+
+    const hours = Math.floor(diff / 3600);
+    diff -= hours * 3600;
+
+    const minutes = Math.floor(diff / 60);
+    const seconds = diff - minutes * 60;
+
+    document.getElementById("romantic-clock").innerHTML =
+        years + "y " +
+        days + "d " +
+        hours + "h " +
+        minutes + "m " +
+        seconds + "s";
+}}
+
+updateClock();
+setInterval(updateClock, 1000);
+</script>
+"""
+
+st.components.v1.html(clock_html, height=200)
+
+# ---------- FLOATING HEARTS ----------
 heart_count = min(120, 20 + max(0, days_together // 10))
 hearts_html = ""
 for _ in range(heart_count):
@@ -61,7 +150,7 @@ for _ in range(heart_count):
         f'animation-duration:{duration}s; font-size:{size}px;">❤️</div>'
     )
 
-# ---------- CSS + CLOCK ----------
+# ---------- CSS ----------
 st.markdown(
     f"""
 <style>
@@ -81,7 +170,6 @@ body, .stApp {{
     font-size: 3rem;
     color: #ff4b6e;
     margin-top: 10px;
-    margin-bottom: 10px;
 }}
 
 .subtitle {{
@@ -92,60 +180,9 @@ body, .stApp {{
 
 .section {{
     background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 18px;
     padding: 22px;
     margin: 22px 0;
-}}
-
-.section h2 {{
-    color: #ff6f8e;
-    margin-top: 0;
-}}
-
-.flip-grid {{
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 12px;
-    margin-top: 14px;
-}}
-
-.flip-box {{
-    background: #111;
-    border-radius: 12px;
-    padding: 10px;
-    border: 1px solid #2f2f2f;
-    box-shadow: inset 0 -3px 0 #050505;
-    text-align: center;
-}}
-
-.flip-value {{
-    font-family: 'Courier New', monospace;
-    font-weight: 700;
-    font-size: 2rem;
-    color: #fff;
-    background: linear-gradient(180deg, #1f1f1f 0%, #0b0b0b 52%, #1a1a1a 100%);
-    border-radius: 8px;
-    padding: 8px 0;
-    position: relative;
-    overflow: hidden;
-}}
-
-.flip-value::after {{
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    border-top: 1px solid rgba(255, 255, 255, 0.25);
-}}
-
-.flip-label {{
-    font-size: 0.78rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #ffa7ba;
-    margin-top: 8px;
 }}
 
 .heart {{
@@ -156,23 +193,12 @@ body, .stApp {{
     animation-name: floatUp;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
-    opacity: 0.86;
 }}
 
 @keyframes floatUp {{
-    0% {{ transform: translateY(0) rotate(0deg); opacity: 0; }}
+    0% {{ transform: translateY(0); opacity: 0; }}
     10% {{ opacity: 1; }}
-    100% {{ transform: translateY(-110vh) rotate(25deg); opacity: 0; }}
-}}
-
-.media-grid img {{
-    border-radius: 12px;
-}}
-
-hr {{
-    border: none;
-    border-top: 1px solid rgba(255,255,255,0.12);
-    margin: 20px 0;
+    100% {{ transform: translateY(-110vh); opacity: 0; }}
 }}
 </style>
 
@@ -180,124 +206,53 @@ hr {{
 
 <div class="main-wrap">
   <div class="title">Kulffi ❤️</div>
-  <div class="subtitle">All in one page. Just scroll with love ✨</div>
-
-  <div class="section">
-    <h2>⏳ Flip Clock Since Feb 21, 2018</h2>
-    <div class="flip-grid">
-      <div class="flip-box"><div class="flip-value" id="years">00</div><div class="flip-label">Years</div></div>
-      <div class="flip-box"><div class="flip-value" id="months">00</div><div class="flip-label">Months</div></div>
-      <div class="flip-box"><div class="flip-value" id="weeks">00</div><div class="flip-label">Weeks</div></div>
-      <div class="flip-box"><div class="flip-value" id="days">00</div><div class="flip-label">Days</div></div>
-      <div class="flip-box"><div class="flip-value" id="hours">00</div><div class="flip-label">Hours</div></div>
-      <div class="flip-box"><div class="flip-value" id="minutes">00</div><div class="flip-label">Minutes</div></div>
-      <div class="flip-box"><div class="flip-value" id="seconds">00</div><div class="flip-label">Seconds</div></div>
-    </div>
-  </div>
+  <div class="subtitle">Just scroll with love ✨</div>
 </div>
-
-<script>
-const startTime = new Date('{start_clock_js}').getTime();
-
-function pad(n) {{
-  return String(n).padStart(2, '0');
-}}
-
-function updateClock() {{
-  const now = Date.now();
-  let diff = Math.max(0, Math.floor((now - startTime) / 1000));
-
-  const years = Math.floor(diff / (365 * 24 * 3600));
-  diff -= years * 365 * 24 * 3600;
-
-  const months = Math.floor(diff / (30 * 24 * 3600));
-  diff -= months * 30 * 24 * 3600;
-
-  const weeks = Math.floor(diff / (7 * 24 * 3600));
-  diff -= weeks * 7 * 24 * 3600;
-
-  const days = Math.floor(diff / (24 * 3600));
-  diff -= days * 24 * 3600;
-
-  const hours = Math.floor(diff / 3600);
-  diff -= hours * 3600;
-
-  const minutes = Math.floor(diff / 60);
-  const seconds = diff - minutes * 60;
-
-  const ids = ['years','months','weeks','days','hours','minutes','seconds'];
-  const vals = [years, months, weeks, days, hours, minutes, seconds];
-
-  ids.forEach((id, i) => {{
-    const el = document.getElementById(id);
-    if (el) el.textContent = pad(vals[i]);
-  }});
-}}
-
-updateClock();
-setInterval(updateClock, 1000);
-</script>
 """,
     unsafe_allow_html=True,
 )
 
-# ---------- OPTIONAL MEDIA ----------
+# ---------- LOAD MEDIA ----------
+# ---------- LOAD MEDIA ----------
 audio_extensions = (".mp3", ".wav", ".ogg", ".m4a")
 image_extensions = (".jpg", ".jpeg", ".png")
 video_extensions = (".mp4", ".mov", ".avi", ".mkv", ".webm")
 
-assets_path = Path("assets")
+ASSETS = Path("assets")
+
 audio_files = []
 images = []
 videos = []
 
-if assets_path.exists() and assets_path.is_dir():
-    audio_files = [
-        str(assets_path / file)
-        for file in os.listdir(assets_path)
-        if file.lower().endswith(audio_extensions)
-    ]
-    images = [
-        str(assets_path / file)
-        for file in os.listdir(assets_path)
-        if file.lower().endswith(image_extensions)
-    ]
-    videos = [
-        str(assets_path / file)
-        for file in os.listdir(assets_path)
-        if file.lower().endswith(video_extensions)
-    ]
+if ASSETS.exists():
+    all_files = list(ASSETS.iterdir())
 
-# ---------- APP NAV ----------
-page = st.sidebar.radio(
-    "Our Story ❤️",
-    ["Beginning", "Chats", "Memories", "Letter", "All In One Scroll"],
-)
+    audio_files = sorted([
+        str(f) for f in all_files if f.suffix.lower() in audio_extensions
+    ])
 
-# ---------- BEGINNING ----------
+    images = sorted([
+        str(f) for f in all_files if f.suffix.lower() in image_extensions
+    ])
+
+    videos = sorted([
+        str(f) for f in all_files if f.suffix.lower() in video_extensions
+    ])
+# ---------- FUNCTIONS (UNCHANGED) ----------
+
 def render_beginning_section():
     st.markdown("## 🌸 Beginning")
     st.write(f"❤️ {days_together} days with you")
-    st.write(
-        """
+    st.write("""
 I still don’t understand how one person became my entire happiness…
-but somehow, you did.
-"""
-    )
+but somehow, you did.. you are soooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo special to me, loveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee you sooooooooooooooooooooooooooooooooooooooooooooooooooooo much.
+""")
 
-
-# ---------- CHATS ----------
 def render_chats_section():
     st.markdown("## 💬 Our Chats")
-    st.markdown('<div style="background:#262626;padding:10px;border-radius:15px;margin:10px;">Kulffi… ❤️</div>', unsafe_allow_html=True)
-    st.markdown('<div style="background:#ff4b6e;padding:10px;border-radius:15px;margin:10px;margin-left:auto;">Hmm? 😌</div>', unsafe_allow_html=True)
-    st.markdown('<div style="background:#262626;padding:10px;border-radius:15px;margin:10px;">I miss you</div>', unsafe_allow_html=True)
-    st.markdown('<div style="background:#ff4b6e;padding:10px;border-radius:15px;margin:10px;margin-left:auto;">Come fast 😭❤️</div>', unsafe_allow_html=True)
-    st.markdown('<div style="background:#262626;padding:10px;border-radius:15px;margin:10px;">You are mine right?</div>', unsafe_allow_html=True)
-    st.markdown('<div style="background:#ff4b6e;padding:10px;border-radius:15px;margin:10px;margin-left:auto;">Always 💖</div>', unsafe_allow_html=True)
+    st.markdown('<div style="background:#262626;padding:10px;border-radius:15px;margin:10px;">Ennaku epadi nu theriyala, enkitta iruka motha love vum unnakey tharanum, unkita iruka motha love vum naney eduthukanum kulffi ❤️</div>', unsafe_allow_html=True)
+    st.markdown('<div style="background:#ff4b6e;padding:10px;border-radius:15px;margin:10px;margin-left:auto;">will you accept me?</div>', unsafe_allow_html=True)
 
-
-# ---------- MEMORIES ----------
 def render_memories_section():
     st.markdown("## 📸 Memories")
 
@@ -307,88 +262,272 @@ def render_memories_section():
             with cols[i % 3]:
                 st.image(img, use_container_width=True)
 
-        st.markdown("### 💖 Slideshow")
-        placeholder = st.empty()
-        for img in images:
-            placeholder.image(img, use_container_width=True)
-            time.sleep(1.2)
-    else:
-        st.info("No images found in the assets folder yet.")
-
     if videos:
         st.markdown("### 🎬 Videos")
         for vid in videos:
             with open(vid, "rb") as f:
                 st.video(f.read())
 
-    if audio_files:
-        st.markdown("### 🎵 Audio")
-        for audio in audio_files:
-            with open(audio, "rb") as f:
-                st.audio(f.read())
-
-
-# ---------- LETTER ----------
 def render_letter_section():
     st.markdown("## 💌 Letter")
-    st.write(
-        """
-Kulffi,
+    st.write("""
+My dear Kulffi,
 
-I don’t even know where to start… because how do you explain someone who became everything?
+I’ve been thinking about you a lot while writing this, and I kept wondering how to say everything I feel in simple words. Even now, I know it still won’t be enough… but I want to try, because you truly mean so much to me.
 
-You didn’t just walk into my life…
-you changed it completely.
+Somewhere along the way, you became more than just a person in my life. You became a part of my everyday thoughts. I don’t even realize it sometimes, but you’re there—in the songs I hear, in random moments, in quiet times when I’m doing nothing. It’s a strange and beautiful feeling, how one person can slowly become so important without even trying.
 
-The way you talk, the way you laugh, the way you care…
-every little thing about you stays in my mind longer than it should.
+I don’t think I say this enough, but you’ve changed me in ways I never expected. You’ve made me calmer when I used to overthink, softer when I used to be a little distant, and happier in ways that feel real and peaceful. Being around you, even just talking to you, makes everything feel easier. With you, I don’t feel like I have to pretend or try too hard. I can just be myself, and that means a lot to me.
 
-You are not just someone I love.
-You are my comfort.
-My peace.
-My favorite person in this entire world.
+There are days when life feels confusing, heavy, or tiring. Sometimes things don’t go as planned, and everything feels a bit too much. But even in those moments, thinking about you brings a kind of comfort I can’t fully explain. It’s like a quiet support, a small light that makes things feel a little better. You’ve become my peace in ways I never thought someone could be.
 
-There are days when everything feels heavy…
-but then I think of you, and suddenly things feel okay again.
+I really don’t know what the future will look like. Life can be unpredictable, and things don’t always go the way we expect. But one thing I feel very sure about is this—if I ever get the choice, I will always choose you. Not just in the good and easy moments, but also in the difficult and messy ones. Because to me, choosing you means choosing something honest and real.
 
-I don’t know what I did to deserve you,
-but I know one thing for sure…
+I want more of everything with you. More conversations that last longer than we expect. More laughter over small and silly things. More memories that we can look back on and smile about. More moments where we just sit and talk about nothing and everything at the same time. I don’t want to rush anything or force anything. I just want us to grow slowly, naturally, and truly understand each other step by step.
 
-I never want a life where you are not in it.
+You’ve become someone very special to me, and I hope you know that. Not just today, not just because it’s your birthday, but every single day. You matter to me more than I can easily put into words.
 
-If life gives me choices again and again,
-I will always choose you.
+And today, on your birthday, I just want to remind you how important you are. I hope your day is full of happiness, smiles, and all the little things that make you feel loved and appreciated. You deserve all the good things in the world.
 
-Not once.
-Not twice.
-But every single time.
+Happy Birthday, my dear Kulffi ❤️
 
-Stay with me…
-grow with me…
-and let’s turn this into something forever.
+Please stay just the way you are… because that’s the person I fell for, and the person I continue to choose every day.
 
-I love you, Kulffi ❤️
-"""
-    )
+Always yours.
 
-    if st.button("One Last Surprise 🎁"):
+Fruit
+
+""")
+
+# ---------- MUSIC PLAYER ----------
+import base64
+
+if audio_files:
+    st.markdown("## 🎵 Our Songs")
+
+    songs_data = []
+
+    for i, audio in enumerate(audio_files):
+        with open(audio, "rb") as f:
+            data = f.read()
+            b64 = base64.b64encode(data).decode()
+
+            ext = audio.split(".")[-1]
+            mime = f"audio/{ext}"
+            song_names = {
+                 "song1": "En Jeevan",
+                 "song2": "Kurumugil",
+                 "song3": "Until I Find You",
+                  "song4": "Moongil Thootam",
+                   "song5": "Oru Kili Oru Kili",
+                 "song6": "Perfect",
+                   "song7": "Mounam Pesum Varthai Yavum",
+                    "song8": "Anbil Mele Panithuli",
+                    "song9": "Ponmayame",
+                "song10": "Sidu Sidu"
+                }
+
+            file_name = os.path.basename(audio).split(".")[0]
+            name = song_names.get(file_name, file_name)
+
+            # Optional: match album art (same name .jpg/.png)
+            img_path = os.path.splitext(audio)[0] + ".jpg"
+            if os.path.exists(img_path):
+                with open(img_path, "rb") as img:
+                    img_b64 = base64.b64encode(img.read()).decode()
+                    img_src = f"data:image/jpeg;base64,{img_b64}"
+            else:
+                img_src = ""
+
+            songs_data.append({
+                "name": name,
+                "data": f"data:{mime};base64,{b64}",
+                "img": img_src
+            })
+
+    songs_js = str(songs_data).replace("'", '"')
+
+    player_html = f"""
+    <style>
+    .player {{
+        text-align:center;
+        padding:20px;
+        border-radius:20px;
+        background: rgba(255,75,110,0.1);
+        box-shadow: 0 0 30px rgba(255,75,110,0.4);
+        color:white;
+    }}
+
+    .cover {{
+        width:120px;
+        height:120px;
+        border-radius:15px;
+        margin-bottom:10px;
+        object-fit:cover;
+        box-shadow: 0 0 15px rgba(255,75,110,0.6);
+    }}
+
+    .title {{
+        font-size:18px;
+        margin-bottom:10px;
+        color:#ff9ab0;
+    }}
+
+    .controls button {{
+        background:#ff4b6e;
+        border:none;
+        color:white;
+        padding:8px 14px;
+        margin:5px;
+        border-radius:50px;
+        cursor:pointer;
+    }}
+
+    .progress-container {{
+        width:100%;
+        height:6px;
+        background:#333;
+        border-radius:10px;
+        margin-top:10px;
+        cursor:pointer;
+    }}
+
+    .progress {{
+        height:100%;
+        width:0%;
+        background:#ff4b6e;
+        border-radius:10px;
+    }}
+    </style>
+
+    <div class="player">
+        <img id="cover" class="cover" src="" />
+        <div id="title" class="title">Loading...</div>
+
+        <audio id="audio"></audio>
+
+        <div class="controls">
+            <button onclick="prevSong()">⏮</button>
+            <button onclick="playSong()">▶</button>
+            <button onclick="pauseSong()">⏸</button>
+            <button onclick="nextSong()">⏭</button>
+        </div>
+
+        <div class="progress-container" onclick="seek(event)">
+            <div id="progress" class="progress"></div>
+        </div>
+    </div>
+
+    <script>
+    let songs = {songs_js};
+
+    let index = 0;
+    let audio = document.getElementById("audio");
+    let title = document.getElementById("title");
+    let cover = document.getElementById("cover");
+    let progress = document.getElementById("progress");
+
+    function loadSong() {{
+        audio.src = songs[index].data;
+        title.innerText = songs[index].name;
+
+        if(songs[index].img) {{
+            cover.src = songs[index].img;
+        }} else {{
+            cover.src = "";
+        }}
+
+        audio.play();
+    }}
+
+    function playSong() {{
+        audio.play();
+    }}
+
+    function pauseSong() {{
+        audio.pause();
+    }}
+
+    function nextSong() {{
+        index = (index + 1) % songs.length;
+        loadSong();
+    }}
+
+    function prevSong() {{
+        index = (index - 1 + songs.length) % songs.length;
+        loadSong();
+    }}
+
+    audio.ontimeupdate = function() {{
+        if(audio.duration) {{
+            let percent = (audio.currentTime / audio.duration) * 100;
+            progress.style.width = percent + "%";
+        }}
+    }}
+
+    function seek(e) {{
+        let rect = e.currentTarget.getBoundingClientRect();
+        let x = e.clientX - rect.left;
+        let width = rect.width;
+        let percent = x / width;
+
+        audio.currentTime = percent * audio.duration;
+    }}
+
+    audio.onended = nextSong;
+
+    loadSong();
+    </script>
+    """
+
+    st.components.v1.html(player_html, height=350)
+# ---------- SINGLE PAGE FLOW ----------
+render_beginning_section()
+st.markdown("---")
+
+render_chats_section()
+st.markdown("---")
+
+render_memories_section()
+st.markdown("---")
+
+render_letter_section()
+# ---------- FINAL SURPRISE ----------
+st.markdown("---")
+st.markdown("## 🎁 One Last Surprise")
+
+if st.button("Click for Surprise 🎉"):
+
+    # More balloons (repeat for stronger effect)
+    for _ in range(5):
         st.balloons()
-        st.success("You are my forever ❤️")
+        time.sleep(0.3)
 
+    # Big glowing message
+    surprise_html = """
+    <style>
+    .birthday-text {
+        text-align:center;
+        font-size:50px;
+        font-weight:700;
+        color:#ffffff;
+        margin-top:30px;
+        text-shadow: 
+            0 0 10px #ff4b6e,
+            0 0 20px #ff4b6e,
+            0 0 40px #ff4b6e;
+        animation: glow 2s infinite alternate;
+    }
 
-if page == "Beginning":
-    render_beginning_section()
-elif page == "Chats":
-    render_chats_section()
-elif page == "Memories":
-    render_memories_section()
-elif page == "Letter":
-    render_letter_section()
-else:
-    render_beginning_section()
-    st.markdown("---")
-    render_chats_section()
-    st.markdown("---")
-    render_memories_section()
-    st.markdown("---")
-    render_letter_section()
+    @keyframes glow {
+        from { text-shadow: 0 0 10px #ff4b6e; }
+        to { text-shadow: 0 0 30px #ff4b6e, 0 0 60px #ff4b6e; }
+    }
+    </style>
+
+    <div class="birthday-text">
+        🎂 Happy Birthday My Dear Kulffi ❤️
+    </div>
+    """
+
+    st.components.v1.html(surprise_html, height=150)

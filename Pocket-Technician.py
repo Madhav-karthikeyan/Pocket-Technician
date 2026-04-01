@@ -24,6 +24,7 @@ from reportlab.lib.pagesizes import A4
 import sqlite3
 from pages.Virtual_Farm import render_virtual_farm
 from pages.Shrimp_Larvae_Detection import render_shrimp_larvae_detection
+from pages.Feed_Tray_AI import render_feed_tray_ai
 
 
 
@@ -1795,14 +1796,6 @@ if selected_module == "Shrimp Larvae Detection":
     render_shrimp_larvae_detection()
     st.stop()
 
-if selected_module == "Feed Tray AI":
-    st.markdown("#### Feed Tray AI")
-    st.info(
-        "🧠 **Feed Tray AI (CNN Object Detection)**\n"
-        "Reserved for tray image analytics and recommendation card."
-    )
-    st.stop()
-
 pond = None
 
 if farm_name and pond_name:
@@ -1830,6 +1823,15 @@ if farm_name and pond_name:
     pond.setdefault("sampling_log", [])
 
 if pond is None:
+    st.stop()
+
+if selected_module == "Feed Tray AI":
+    render_feed_tray_ai(
+        pond=pond,
+        farm_name=farm_name,
+        pond_name=pond_name,
+        feed_tray_logic=feed_tray_logic,
+    )
     st.stop()
 
 st.markdown("#### Sampling")
@@ -1917,19 +1919,6 @@ if "pending_sampling" in st.session_state:
 
         # Clear temporary data
         del st.session_state["pending_sampling"]
-# Feed Tray 
-    st.subheader("Feed Tray Calculation")
-
-    if pond["sampling_log"]:
-        last_abw = pond["sampling_log"][-1]["abw"]
-
-    last_feed = st.number_input("Last Feed Given (kg)", value=10.0)
-    tray_left = st.number_input("Feed Left on Tray (g)", value=5.0)
-    consumed_time = st.number_input("Consumed Time (minutes)", value=60)
-
-    if st.button("Calculate Feed Tray Decision"):
-        result = feed_tray_logic(last_abw, last_feed, tray_left, consumed_time)
-        st.json(result)
 
 
 # Graph

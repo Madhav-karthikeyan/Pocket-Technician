@@ -5,15 +5,19 @@ from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
-from supabase import Client, create_client
+from typing import Any, Optional
+
+try:
+    from supabase import Client, create_client
+except Exception:  # supabase package may be unavailable in some deployments
+    Client = Any  # type: ignore
+    create_client = None
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_FILE = BASE_DIR / "farm_data.db"
 JSON_FILE = BASE_DIR / "farm_data.json"
 
 APP_STATE_TABLE = "app_state"
-SUPABASE_URL= https://hdlkeblroveimxaahcyr.supabase.co 
-SUPABASE_ANON_KEY= eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkbGtlYmxyb3ZlaW14YWFoY3lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMTgxOTQsImV4cCI6MjA5MDU5NDE5NH0.YYsNaXNICEpsDutVqtu5qycJU5XDVJGcK9H9orDowjQ
 
 
 def default_payload():
@@ -26,9 +30,12 @@ def _get_supabase_creds():
     return url, anon
 
 
-def get_supabase_client() -> Client | None:
+def get_supabase_client() -> Optional[Client]:
     if "supabase_client" in st.session_state:
         return st.session_state["supabase_client"]
+
+    if create_client is None:
+        return None
 
     url, anon = _get_supabase_creds()
     if not url or not anon:
@@ -55,7 +62,10 @@ def render_auth_ui() -> bool:
     client = get_supabase_client()
 
     if client is None:
-        st.error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY to Streamlit secrets.")
+        if create_client is None:
+            st.error("Supabase SDK is missing. Install the `supabase` package in your environment.")
+        else:
+            st.error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY to Streamlit secrets.")
         return False
 
     user = st.session_state.get("auth_user")

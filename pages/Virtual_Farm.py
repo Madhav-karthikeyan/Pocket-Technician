@@ -1,7 +1,5 @@
 import io
-import json
 import os
-import sqlite3
 from datetime import date, datetime
 
 import matplotlib.pyplot as plt
@@ -10,8 +8,8 @@ import streamlit as st
 from matplotlib.backends.backend_pdf import PdfPages
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
-DATA_FILE = os.path.join(BASE_DIR, "farm_data.json")
+
+from supabase_backend import get_user_id, load_user_payload, render_auth_ui, save_user_payload
 
 
 def _default_data():
@@ -19,47 +17,22 @@ def _default_data():
 
 
 def _load_data():
-    if os.path.exists(DB_FILE):
-        with sqlite3.connect(DB_FILE) as conn:
-            row = conn.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
-            if row:
-                loaded = json.loads(row[0])
-                if isinstance(loaded, dict):
-                    loaded.setdefault("farms", {})
-                    return loaded
-
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            loaded = json.load(f)
-            if isinstance(loaded, dict):
-                loaded.setdefault("farms", {})
-                return loaded
-
-    return _default_data()
+    if not render_auth_ui():
+        return _default_data()
+    user_id = get_user_id()
+    if not user_id:
+        return _default_data()
+    data = load_user_payload(user_id)
+    data.setdefault("farms", {})
+    return data
 
 
 def _save_data(payload: dict):
-    os.makedirs(BASE_DIR, exist_ok=True)
-
-    with sqlite3.connect(DB_FILE) as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS app_state (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                payload TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
-        now = datetime.now().isoformat(timespec="seconds")
-        conn.execute(
-            "INSERT OR REPLACE INTO app_state (id, payload, updated_at) VALUES (1, ?, ?)",
-            (json.dumps(payload), now),
-        )
-        conn.commit()
-
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    user_id = get_user_id()
+    if not user_id:
+        return
+    payload["user_id"] = user_id
+    save_user_payload(user_id, payload)
 
 
 def _calc_doc(stocking_date_str: str):

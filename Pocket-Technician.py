@@ -1219,6 +1219,8 @@ def save_data():
 # SHORTCUT VARIABLE
 # ==============================
 data = st.session_state.data
+memory = data.setdefault("memory", {})
+last_selection = memory.setdefault("last_selection", {})
 # =====================================================
 # AUTO-UPGRADE OLD SAMPLING DATA (ADD HERE)
 # =====================================================
@@ -1595,7 +1597,16 @@ if (
     previous_farm = st.session_state.get("farm_name", "").strip()
     previous_pond = st.session_state.get("pond_name", "").strip()
     previous_location = st.session_state.get("location", "").strip()
+
+    if not (previous_farm and previous_pond and previous_location):
+        previous_farm = str(last_selection.get("farm_name", "")).strip()
+        previous_pond = str(last_selection.get("pond_name", "")).strip()
+        previous_location = str(last_selection.get("location", "")).strip()
+
     if previous_farm and previous_pond and previous_location:
+        st.session_state["farm_name"] = previous_farm
+        st.session_state["pond_name"] = previous_pond
+        st.session_state["location"] = previous_location
         st.session_state["setup_farm_name"] = previous_farm
         st.session_state["setup_pond_name"] = previous_pond
         st.session_state["setup_location"] = previous_location
@@ -1633,6 +1644,12 @@ if not st.session_state["onboarding_done"]:
             st.session_state["mode"] = selected_mode
             st.session_state["onboarding_done"] = True
             st.session_state["allow_saved_farm_autoload"] = False
+            memory["last_selection"] = {
+                "farm_name": clean_farm_name,
+                "pond_name": clean_pond_name,
+                "location": clean_location,
+            }
+            save_data()
             st.rerun()
 
     st.stop()
@@ -1655,6 +1672,19 @@ if farm_name:
 
     if farm_context_changed:
         save_data()
+
+last_selection_changed = (
+    last_selection.get("farm_name") != farm_name
+    or last_selection.get("pond_name") != pond_name
+    or last_selection.get("location") != location
+)
+if farm_name and pond_name and location and last_selection_changed:
+    memory["last_selection"] = {
+        "farm_name": farm_name,
+        "pond_name": pond_name,
+        "location": location,
+    }
+    save_data()
 
 st.sidebar.subheader("Navigation")
 st.session_state["mode"] = st.sidebar.selectbox(

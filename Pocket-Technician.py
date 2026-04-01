@@ -1,9 +1,11 @@
 import streamlit as st
 import json
 import os
+import smtplib
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import date, datetime
+from email.message import EmailMessage
 from reportlab.platypus import (
     SimpleDocTemplate,
     Paragraph,
@@ -50,13 +52,6 @@ DATA_FILE_ALIASES = [
     os.path.join(BASE_DIR, "farm_data.json"),
 ]
 DB_FILE = os.path.join(BASE_DIR, "farm_data.db")
-USER_LOG_FILE = os.path.join(BASE_DIR, "user_log.json")
-USER_LOG_FILE_ALIASES = [
-    USER_LOG_FILE,
-    os.path.join(BASE_DIR, "user_log.json"),
-    os.path.join(BASE_DIR, "userlog.json"),
-    os.path.join(BASE_DIR, "userlog.json"),
-]
 
 
 SUPPORT_NOTE = (
@@ -69,95 +64,37 @@ def show_support_note():
     st.info(SUPPORT_NOTE)
 
 
-def _normalize_user_log_payload(loaded):
-    if isinstance(loaded, dict):
-        users = loaded.get("users", [])
-        if isinstance(users, list):
-            return {"users": users}
-    if isinstance(loaded, list):
-        return {"users": loaded}
-    return {"users": []}
+def send_support_email(sender_email: str, subject: str, body: str):
+    """Send support email without persisting sender email in app storage."""
+    smtp_host = st.secrets.get("SMTP_HOST", os.getenv("SMTP_HOST", "")).strip()
+    smtp_port = int(st.secrets.get("SMTP_PORT", os.getenv("SMTP_PORT", "587")))
+    smtp_user = st.secrets.get("SMTP_USER", os.getenv("SMTP_USER", "")).strip()
+    smtp_pass = st.secrets.get("SMTP_PASS", os.getenv("SMTP_PASS", "")).strip()
+    target = "madhavkarthikeyan2@gmail.com"
 
+    if not (smtp_host and smtp_user and smtp_pass):
+        return (
+            False,
+            "Email is not configured yet. Please add SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS in Streamlit secrets.",
+        )
 
-def load_user_log():
-    for candidate in USER_LOG_FILE_ALIASES:
-        if not os.path.exists(candidate):
-            continue
-        try:
-            with open(candidate, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-            return _normalize_user_log_payload(loaded)
-        except (json.JSONDecodeError, OSError):
-            continue
-    return {"users": []}
-
-
-def get_latest_saved_context():
-    """Return the most recent non-empty onboarding details from user_log.json."""
-    latest_user_name = ""
-    latest_location = ""
-    latest_farm_name = ""
-    latest_pond_name = ""
-
-    for entry in reversed(load_user_log().get("users", [])):
-        if not latest_user_name:
-            latest_user_name = (entry.get("user_name", "") or "").strip()
-        if not latest_location:
-            latest_location = (entry.get("location", "") or "").strip()
-        if not latest_farm_name:
-            latest_farm_name = (entry.get("farm_name", "") or "").strip()
-        if not latest_pond_name:
-            latest_pond_name = (entry.get("pond_name", "") or "").strip()
-        if latest_user_name and latest_location and latest_farm_name and latest_pond_name:
-            break
-
-    return {
-        "user_name": latest_user_name,
-        "location": latest_location,
-        "farm_name": latest_farm_name,
-        "pond_name": latest_pond_name,
-    }
-
-
-def save_user_log(user_name, location, farm_name="", pond_name=""):
-    """Persist user onboarding information for usage tracking."""
-    log_payload = load_user_log()
-    cleaned_name = (user_name or "").strip()
-    cleaned_location = (location or "").strip()
-
-    # Allow farm/pond enrichment even if the second step does not resend
-    # user/location values in the current Streamlit session.
-    if (not cleaned_name or not cleaned_location) and log_payload["users"]:
-        last_user = log_payload["users"][-1]
-        cleaned_name = cleaned_name or (last_user.get("user_name", "").strip())
-        cleaned_location = cleaned_location or (last_user.get("location", "").strip())
-
-    if not cleaned_name or not cleaned_location:
-        return False
-
-    log_payload["users"].append(
-        {
-            "user_name": cleaned_name,
-            "location": cleaned_location,
-            "farm_name": (farm_name or "").strip(),
-            "pond_name": (pond_name or "").strip(),
-            "logged_at": datetime.now().isoformat(timespec="seconds"),
-        }
+    msg = EmailMessage()
+    msg["Subject"] = f"[Pocket Technician] {subject.strip() or 'Support Request'}"
+    msg["From"] = smtp_user
+    msg["To"] = target
+    msg["Reply-To"] = sender_email.strip()
+    msg.set_content(
+        f"Sender Email: {sender_email.strip()}\n\nMessage:\n{body.strip()}"
     )
 
-    write_ok = False
-    for candidate in USER_LOG_FILE_ALIASES:
-        try:
-            with open(candidate, "w", encoding="utf-8") as f:
-                json.dump(log_payload, f, ensure_ascii=False, indent=2)
-            if candidate == USER_LOG_FILE:
-                write_ok = True
-        except OSError:
-            # Alias writes are best-effort; keep primary file as source of truth.
-            if candidate == USER_LOG_FILE:
-                return False
-
-    return write_ok
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+        return True, "Your email was sent successfully."
+    except Exception as e:
+        return False, f"Failed to send email: {e}"
 
 
 # Reference chart: Count per kg → %Feed → Feed per 100k
@@ -1618,84 +1555,35 @@ st.title("🦐 Pocket Technician")
 
 if "mode" not in st.session_state:
     st.session_state["mode"] = "Technician"
-if "user_cover_done" not in st.session_state:
-    st.session_state["user_cover_done"] = False
 if "onboarding_done" not in st.session_state:
     st.session_state["onboarding_done"] = False
-if "allow_saved_user_autoload" not in st.session_state:
-    st.session_state["allow_saved_user_autoload"] = True
 if "allow_saved_farm_autoload" not in st.session_state:
     st.session_state["allow_saved_farm_autoload"] = True
 
-saved_context = get_latest_saved_context()
-if (
-    st.session_state["allow_saved_user_autoload"]
-    and not st.session_state["user_cover_done"]
-    and saved_context["user_name"]
-    and saved_context["location"]
-):
-    st.session_state["user_name"] = saved_context["user_name"]
-    st.session_state["location"] = saved_context["location"]
-    st.session_state["cover_user_name"] = saved_context["user_name"]
-    st.session_state["cover_location"] = saved_context["location"]
-    st.session_state["user_cover_done"] = True
-    st.session_state["allow_saved_user_autoload"] = False
 if (
     st.session_state["allow_saved_farm_autoload"]
-    and st.session_state["user_cover_done"]
     and not st.session_state["onboarding_done"]
-    and saved_context["farm_name"]
-    and saved_context["pond_name"]
 ):
-    st.session_state["farm_name"] = saved_context["farm_name"]
-    st.session_state["pond_name"] = saved_context["pond_name"]
-    st.session_state["setup_farm_name"] = saved_context["farm_name"]
-    st.session_state["setup_pond_name"] = saved_context["pond_name"]
-    st.session_state["onboarding_done"] = True
+    previous_farm = st.session_state.get("farm_name", "").strip()
+    previous_pond = st.session_state.get("pond_name", "").strip()
+    previous_location = st.session_state.get("location", "").strip()
+    if previous_farm and previous_pond and previous_location:
+        st.session_state["setup_farm_name"] = previous_farm
+        st.session_state["setup_pond_name"] = previous_pond
+        st.session_state["setup_location"] = previous_location
+        st.session_state["onboarding_done"] = True
     st.session_state["allow_saved_farm_autoload"] = False
-
-if not st.session_state["user_cover_done"]:
-    st.markdown("### Thank you for using Pocket Technician 🙏")
-    st.caption("Please enter your user details before proceeding to farm and pond setup.")
-
-    _, center_panel, _ = st.columns([1, 2, 1])
-    with center_panel:
-        with st.form("user_cover_form", clear_on_submit=False):
-            user_name = st.text_input("User Name", key="cover_user_name")
-            location = st.text_input("Location", key="cover_location")
-            user_submitted = st.form_submit_button("Continue", use_container_width=True)
-
-        if user_submitted:
-            clean_user_name = user_name.strip()
-            clean_location = location.strip()
-            if not clean_user_name or not clean_location:
-                st.warning("User Name and Location are required.")
-                st.stop()
-
-            st.session_state["user_name"] = clean_user_name
-            st.session_state["location"] = clean_location
-            if not save_user_log(st.session_state["user_name"], st.session_state["location"]):
-                st.error("Could not save user details to user_log.json. Please check file permissions.")
-                st.stop()
-            st.session_state["user_cover_done"] = True
-            st.session_state["allow_saved_user_autoload"] = False
-            st.rerun()
-
-    st.stop()
 
 if not st.session_state["onboarding_done"]:
     st.markdown("### Welcome")
-    st.caption("Enter farm and pond details to continue.")
-    st.info(
-        f"Thank you, {st.session_state.get('user_name', '')}. "
-        f"Location: {st.session_state.get('location', '')}."
-    )
+    st.caption("Enter farm, pond, and location details to continue.")
 
     _, center_panel, _ = st.columns([1, 2, 1])
     with center_panel:
         with st.form("farm_setup_form", clear_on_submit=False):
             farm_name = st.text_input("Farm Name", key="setup_farm_name")
             pond_name = st.text_input("Pond Name", key="setup_pond_name")
+            location_input = st.text_input("Location", key="setup_location")
             selected_mode = st.radio(
                 "Select Mode",
                 options=["Technician", "Virtual Farm"],
@@ -1707,20 +1595,14 @@ if not st.session_state["onboarding_done"]:
         if submitted:
             clean_farm_name = farm_name.strip()
             clean_pond_name = pond_name.strip()
-            if not clean_farm_name or not clean_pond_name:
-                st.warning("Farm Name and Pond Name are required.")
+            clean_location = location_input.strip()
+            if not clean_farm_name or not clean_pond_name or not clean_location:
+                st.warning("Farm Name, Pond Name, and Location are required.")
                 st.stop()
             st.session_state["farm_name"] = clean_farm_name
             st.session_state["pond_name"] = clean_pond_name
+            st.session_state["location"] = clean_location
             st.session_state["mode"] = selected_mode
-            if not save_user_log(
-                st.session_state.get("user_name", ""),
-                st.session_state.get("location", ""),
-                farm_name=st.session_state["farm_name"],
-                pond_name=st.session_state["pond_name"],
-            ):
-                st.error("Could not save farm onboarding details to user_log.json. Please check file permissions.")
-                st.stop()
             st.session_state["onboarding_done"] = True
             st.session_state["allow_saved_farm_autoload"] = False
             st.rerun()
@@ -1742,14 +1624,6 @@ if farm_name:
             farm_context_changed = True
     elif farm_entry.get("location"):
         location = farm_entry["location"]
-    user_name = st.session_state.get("user_name", "").strip()
-    if user_name:
-        farm_entry["user_name"] = user_name
-
-    user_name = st.session_state.get("user_name", "").strip()
-    if user_name and farm_entry.get("user_name") != user_name:
-        farm_entry["user_name"] = user_name
-        farm_context_changed = True
 
     if farm_context_changed:
         save_data()
@@ -1765,19 +1639,17 @@ if st.sidebar.button("🔁 Change Farm / Pond", use_container_width=True):
     st.session_state["allow_saved_farm_autoload"] = False
     st.session_state["setup_farm_name"] = ""
     st.session_state["setup_pond_name"] = ""
+    st.session_state["setup_location"] = ""
     st.rerun()
-if st.sidebar.button("👤 Change User / Location", use_container_width=True):
-    st.session_state["user_cover_done"] = False
+if st.sidebar.button("📍 Change Location", use_container_width=True):
     st.session_state["onboarding_done"] = False
-    st.session_state["allow_saved_user_autoload"] = False
     st.session_state["allow_saved_farm_autoload"] = False
-    st.session_state["cover_user_name"] = ""
-    st.session_state["cover_location"] = ""
     st.session_state["setup_farm_name"] = ""
     st.session_state["setup_pond_name"] = ""
+    st.session_state["setup_location"] = ""
     st.rerun()
 
-st.sidebar.caption("👥 User entries are logged privately to user_log.json.")
+st.sidebar.caption("🧠 Memory uses Farm Name, Pond Name, and Location.")
 
 if st.session_state["mode"] == "Virtual Farm":
     render_virtual_farm(standalone=False)
@@ -1786,7 +1658,7 @@ if st.session_state["mode"] == "Virtual Farm":
 st.sidebar.subheader("Technician Modules")
 selected_module = st.sidebar.selectbox(
     "Select Technician Section",
-    options=["Sampling", "Feed Tray AI", "Shrimp Larvae Detection"],
+    options=["Sampling", "Feed Tray AI", "Shrimp Larvae Detection", "Contact Support"],
     key="technician_module",
 )
 
@@ -1801,6 +1673,26 @@ if selected_module == "Feed Tray AI":
         "🧠 **Feed Tray AI (CNN Object Detection)**\n"
         "Reserved for tray image analytics and recommendation card."
     )
+    st.stop()
+
+if selected_module == "Contact Support":
+    st.markdown("#### Contact Support")
+    st.caption("Your email is used only to send this message and is not saved in app memory.")
+    with st.form("contact_support_form", clear_on_submit=True):
+        sender_email = st.text_input("Your Email")
+        subject = st.text_input("Subject", value="Pocket Technician Support")
+        message = st.text_area("Message", height=180)
+        send_now = st.form_submit_button("Send Email", use_container_width=True)
+
+    if send_now:
+        if not sender_email.strip() or not message.strip():
+            st.warning("Please enter both your email and a message.")
+            st.stop()
+        success, info = send_support_email(sender_email, subject, message)
+        if success:
+            st.success(info)
+        else:
+            st.error(info)
     st.stop()
 
 pond = None

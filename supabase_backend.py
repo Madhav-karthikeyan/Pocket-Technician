@@ -154,10 +154,36 @@ def _read_legacy_payload():
     return default_payload()
 
 
+def _write_legacy_payload(payload: dict):
+    safe_payload = payload if isinstance(payload, dict) else default_payload()
+    safe_payload.setdefault("farms", {})
+    safe_payload.setdefault("memory", {})
+
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)")
+            conn.execute(
+                "INSERT INTO app_state (id, payload) VALUES (1, ?) "
+                "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+                (json.dumps(safe_payload),),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+    try:
+        with JSON_FILE.open("w", encoding="utf-8") as fp:
+            json.dump(safe_payload, fp)
+    except Exception:
+        pass
+
+
 def load_user_payload(user_id: str):
     client = get_supabase_client()
-    if client is None or not user_id:
+    if not user_id:
         return default_payload()
+    if client is None:
+        return _read_legacy_payload()
 
     try:
         response = (
@@ -187,7 +213,10 @@ def load_user_payload(user_id: str):
 
 def save_user_payload(user_id: str, payload: dict):
     client = get_supabase_client()
-    if client is None or not user_id:
+    if not user_id:
+        return
+    if client is None:
+        _write_legacy_payload(payload)
         return
 
     safe_payload = payload if isinstance(payload, dict) else default_payload()
@@ -206,5 +235,6 @@ def save_user_payload(user_id: str, payload: dict):
     except Exception as exc:
         if _is_missing_table_error(exc):
             _show_missing_table_help(get_app_state_table())
+            _write_legacy_payload(safe_payload)
             return
         st.error(f"Failed saving Supabase data: {exc}")

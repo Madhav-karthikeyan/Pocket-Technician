@@ -23,10 +23,10 @@ from astral import moon
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-import sqlite3
 from pages.Virtual_Farm import render_virtual_farm
 from pages.Shrimp_Larvae_Detection import render_shrimp_larvae_detection
 from pages.Feed_Tray_AI import render_feed_tray_ai
+from supabase_backend import get_user_id, load_user_payload, render_auth_ui, save_user_payload
 
 
 
@@ -1101,133 +1101,35 @@ REFERENCE_FEED_CHART = {
 }
 
 # =====================================================
-# STORAGE
+# STORAGE (SUPABASE + USER SCOPING)
 # =====================================================
-# Load once
-# ==============================
-# LOAD DATA (ONLY ONCE)
-# ==============================
-def _default_data():
-    return {"farms": {}}
+if not render_auth_ui():
+    st.stop()
+
+current_user_id = get_user_id()
+if not current_user_id:
+    st.stop()
+
+if "data" not in st.session_state or st.session_state.get("data_user_id") != current_user_id:
+    st.session_state.data = load_user_payload(current_user_id)
+    st.session_state["data_user_id"] = current_user_id
 
 
-def _write_json_backup(payload):
-    for candidate in DATA_FILE_ALIASES:
-        try:
-            with open(candidate, "w", encoding="utf-8") as f:
-                json.dump(payload, f, indent=4)
-        except Exception:
-            # Backup write should never block primary DB save.
-            pass
-
-
-def _get_db_connection():
-    conn = sqlite3.connect(DB_FILE, timeout=30, isolation_level=None)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous=NORMAL;")
-    conn.execute("PRAGMA busy_timeout=30000;")
-    return conn
-
-
-def _ensure_db():
-    with _get_db_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS app_state (
-                id INTEGER PRIMARY KEY CHECK (id = 1),
-                payload TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-            """
-        )
-
-
-def _migrate_json_to_db_if_needed():
-    source_file = next((path for path in DATA_FILE_ALIASES if os.path.exists(path)), None)
-    if not source_file:
-        return
-    try:
-        with _get_db_connection() as conn:
-            row = conn.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
-            if row:
-                return
-
-        with open(source_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if not isinstance(data, dict):
-                data = _default_data()
-            data.setdefault("farms", {})
-
-        with _get_db_connection() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO app_state (id, payload, updated_at)
-                VALUES (1, ?, ?)
-                """,
-                (json.dumps(data), datetime.now().isoformat()),
-            )
-            conn.execute("COMMIT")
-    except Exception as e:
-        st.warning(f"JSON-to-DB migration skipped: {e}")
-
-
-def _load_data_from_db():
-    try:
-        with _get_db_connection() as conn:
-            row = conn.execute("SELECT payload FROM app_state WHERE id = 1").fetchone()
-            if not row:
-                return _default_data()
-            loaded = json.loads(row[0])
-            if isinstance(loaded, dict):
-                loaded.setdefault("farms", {})
-                return loaded
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        show_support_note()
-    return _default_data()
-
-
-_ensure_db()
-_migrate_json_to_db_if_needed()
-
-if "data" not in st.session_state:
-    st.session_state.data = _load_data_from_db()
-
-# ==============================
-# SAVE FUNCTION
-# ==============================
 def save_data():
-    try:
-        payload_dict = st.session_state.data
-        payload_json = json.dumps(payload_dict)
-        with _get_db_connection() as conn:
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO app_state (id, payload, updated_at)
-                VALUES (1, ?, ?)
-                """,
-                (payload_json, datetime.now().isoformat()),
-            )
-            conn.execute("COMMIT")
-        _write_json_backup(payload_dict)
-    except Exception as e:
-        st.error(f"Error saving data: {e}")
-        show_support_note()
+    payload_dict = st.session_state.data
+    payload_dict["user_id"] = current_user_id
+    save_user_payload(current_user_id, payload_dict)
 
-# ==============================
-# SHORTCUT VARIABLE
-# ==============================
+
 data = st.session_state.data
+data["user_id"] = current_user_id
 memory = data.setdefault("memory", {})
 last_selection = memory.setdefault("last_selection", {})
-# =====================================================
-# AUTO-UPGRADE OLD SAMPLING DATA (ADD HERE)
-# =====================================================
 
 for farm in data["farms"].values():
+    farm["user_id"] = current_user_id
     for pond in farm["ponds"].values():
+        pond["user_id"] = current_user_id
 
         if "stocking_date" not in pond:
             continue
@@ -1237,6 +1139,7 @@ for farm in data["farms"].values():
         ).date()
 
         for s in pond.get("sampling_log", []):
+            s["user_id"] = current_user_id
             if "DOC" not in s and "sampling_date" in s:
                 s["DOC"] = (
                     datetime.fromisoformat(s["sampling_date"]).date()
@@ -1289,6 +1192,28 @@ def ensure_survival_pct(df):
     else:
         df["survival_pct"] = 0
     return df
+
+def _sum_feed_between_dates(feed_log, start_date, end_date):
+    total_feed = 0.0
+    for entry in feed_log:
+        try:
+            feed_date = datetime.fromisoformat(str(entry.get("date"))).date()
+        except Exception:
+            continue
+        if start_date <= feed_date <= end_date:
+            total_feed += float(entry.get("feed", 0.0) or 0.0)
+    return total_feed
+
+
+def _derive_interval_feed(pond, previous_sampling_date, current_sampling_date, current_daily_feed):
+    interval_feed = _sum_feed_between_dates(
+        pond.get("feed_log", []), previous_sampling_date, current_sampling_date
+    )
+    if interval_feed > 0:
+        return interval_feed
+
+    gap_days = max(1, (current_sampling_date - previous_sampling_date).days)
+    return float(current_daily_feed) * gap_days
 
 # =====================================================
 # SAMPLING ENGINE (CORRECTED)
@@ -1350,14 +1275,22 @@ def sampling_logic(count_input, daily_feed, pond, sampling_date):
             biomass_gain = biomass - last["biomass"]
             survival_change = survival_pct - get_survival_value(last)
 
-            feed_used = sum(f["feed"] for f in pond["feed_log"])
+            last_sampling_date = datetime.fromisoformat(last["sampling_date"]).date()
+            interval_feed_used = _derive_interval_feed(
+                pond,
+                previous_sampling_date=last_sampling_date,
+                current_sampling_date=sampling_date,
+                current_daily_feed=daily_feed,
+            )
 
             record.update({
-                "weekly_growth": round(weight_gain*(7/gap),2),
-                "weekly_ADG": round(weight_gain/gap,3),
-                "weekly_biomass": round(biomass_gain*(7/gap),1),
-                "weekly_survival": round(survival_change,2),
-                "weekly_FCR": round(feed_used/biomass_gain,2) if biomass_gain>0 else None
+                "sampling_interval_days": gap,
+                "interval_feed_used": round(interval_feed_used, 2),
+                "weekly_growth": round(weight_gain * (7 / gap), 2),
+                "weekly_ADG": round(weight_gain / gap, 3),
+                "weekly_biomass": round(biomass_gain * (7 / gap), 1),
+                "weekly_survival": round(survival_change, 2),
+                "weekly_FCR": round(interval_feed_used / biomass_gain, 2) if biomass_gain > 0 else None,
             })
 
     return record
@@ -1803,7 +1736,7 @@ else:
 # Feed
 daily_feed = st.number_input("Feed Given Today (kg)", 0.0)
 if st.button("Save Feed"):
-    pond["feed_log"].append({"date": str(date.today()), "feed": daily_feed})
+    pond["feed_log"].append({"date": str(date.today()), "feed": daily_feed, "user_id": current_user_id})
     save_data()
 
 # Sampling
@@ -1842,6 +1775,7 @@ if "pending_sampling" in st.session_state:
 
     if st.button("💾 Save Sampling Record"):
 
+        st.session_state["pending_sampling"]["user_id"] = current_user_id
         pond["sampling_log"].append(st.session_state["pending_sampling"])
         save_data()
 
@@ -1930,12 +1864,12 @@ st.subheader("📊 Feed Efficiency Trend (Weekly FCR)")
 if pond["sampling_log"]:
     df = pd.DataFrame(pond["sampling_log"])
 
-    if "weekly_fcr" in df.columns:
-        df_fcr = df.dropna(subset=["weekly_fcr"])
+    if "weekly_FCR" in df.columns:
+        df_fcr = df.dropna(subset=["weekly_FCR"])
 
         if not df_fcr.empty:
             fig, ax = plt.subplots()
-            ax.plot(df_fcr["DOC"], df_fcr["weekly_fcr"], marker="o")
+            ax.plot(df_fcr["DOC"], df_fcr["weekly_FCR"], marker="o")
             ax.set_xlabel("DOC")
             ax.set_ylabel("Weekly FCR")
             ax.set_title("Feed Efficiency Trend")

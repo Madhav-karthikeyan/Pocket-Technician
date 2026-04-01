@@ -1519,7 +1519,7 @@ def render_weather_and_lunar(location):
     styled_df = (
         daily_df.style
         .format({"Max_temp": "{:.1f}", "Min_temp": "{:.1f}", "Rain_total": "{:.1f}"})
-        .applymap(color_feed, subset=["Feeding_Decision"])
+        .map(color_feed, subset=["Feeding_Decision"])
     )
 
     st.subheader("7-Day Forecast with Feeding Decision")

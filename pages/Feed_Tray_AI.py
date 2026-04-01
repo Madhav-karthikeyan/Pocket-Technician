@@ -46,32 +46,38 @@ def _tray_adjustment(leftover_pct, daily_increment_pct):
     return "Slight Increase", 1.0 + (daily_increment_pct / 200.0)
 
 
-def _build_projection_from_reference(start_doc, days, start_abw, tray_leftover_pct):
+def _build_projection_from_reference(start_doc, days, start_abw, tray_leftover_pct, stocking_count, survival_pct):
     rows = []
     accumulated = 0.0
 
     base_start = _reference_row_for_doc(start_doc)
     abw_ratio = (start_abw / base_start["abw"]) if base_start["abw"] > 0 else 1.0
+    effective_stocking = max(0.0, float(stocking_count)) * max(0.0, float(survival_pct)) / 100.0
+    stocking_factor = effective_stocking / 100000.0 if effective_stocking > 0 else 0.0
 
     for offset in range(days):
         doc = start_doc + offset
         ref = _reference_row_for_doc(doc)
         base_feed = ref["feed_kg_day"] * abw_ratio
+        actual_feed = base_feed * stocking_factor
         daily_increment_pct = ref["daily_increment_pct"]
         tray_action, tray_multiplier = _tray_adjustment(tray_leftover_pct, daily_increment_pct)
-        adjusted_feed = base_feed * tray_multiplier
+        adjusted_feed = actual_feed * tray_multiplier
         accumulated += adjusted_feed
 
         rows.append(
             {
-                "Stocking": "1 Lakh",
+                "Stocking Count": int(stocking_count),
+                "Survival (%)": round(survival_pct, 2),
+                "Effective Stocking": int(effective_stocking),
                 "DOC": doc,
                 "ABW (g)": round(ref["abw"] * abw_ratio, 3),
-                "Base Feed (kg/day)": round(base_feed, 3),
+                "Reference Feed @1 Lakh (kg/day)": round(base_feed, 3),
+                "Actual Feed Required (kg/day)": round(actual_feed, 3),
                 "Daily Increment (%)": daily_increment_pct,
                 "Tray Left (%)": round(tray_leftover_pct, 2),
                 "Tray Action": tray_action,
-                "Recommended Feed (kg/day)": round(adjusted_feed, 3),
+                "Recommended Feed After Tray (kg/day)": round(adjusted_feed, 3),
                 "Accumulated Feed (kg)": round(accumulated, 3),
             }
         )
@@ -130,7 +136,7 @@ def render_feed_tray_ai(pond, farm_name, pond_name, feed_tray_logic):
 
     st.subheader("🤖 Feed Projection AI (Reference Chart Based)")
     st.caption(
-        "This is a makeshift chart for 1 lakh stocking. You can replace it with your actual reference chart later."
+        "Add stocking details below to calculate actual feed required from the 1 lakh reference chart."
     )
 
     latest_doc = 1
@@ -181,12 +187,32 @@ def render_feed_tray_ai(pond, farm_name, pond_name, feed_tray_logic):
         step=0.5,
         key="ai_tray_leftover_pct",
     )
+    stock_col1, stock_col2 = st.columns(2)
+    with stock_col1:
+        stocking_count = st.number_input(
+            "Stocking Count (PL)",
+            min_value=0,
+            value=int(pond.get("initial_stock", 100000) or 100000),
+            step=1000,
+            key="ai_stocking_count",
+        )
+    with stock_col2:
+        survival_pct = st.number_input(
+            "Expected Survival (%)",
+            min_value=0.0,
+            max_value=100.0,
+            value=85.0,
+            step=0.5,
+            key="ai_survival_pct",
+        )
 
     projection_df = _build_projection_from_reference(
         start_doc=int(projection_start_doc),
         days=int(projection_days),
         start_abw=float(abw_input) if abw_input > 0 else float(default_abw),
         tray_leftover_pct=float(tray_leftover_pct),
+        stocking_count=int(stocking_count),
+        survival_pct=float(survival_pct),
     )
     st.dataframe(projection_df, use_container_width=True)
 

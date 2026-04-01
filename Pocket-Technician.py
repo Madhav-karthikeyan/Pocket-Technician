@@ -1877,35 +1877,6 @@ if pond["sampling_log"]:
         else:
             st.info("Weekly FCR data available from 2nd sampling onwards.")
 # =====================================================
-# HARVEST READINESS PREDICTOR
-# =====================================================
-
-st.subheader("🦐 Harvest Readiness Predictor")
-
-target_size = st.number_input("Target Harvest Size (g)", value=25)
-
-if pond["sampling_log"]:
-    latest = pond["sampling_log"][-1]
-    current_abw = latest["abw"]
-    survival = get_survival_value(latest)
-    biomass = latest["biomass"]
-
-    if current_abw >= target_size:
-        st.success("✔ Shrimp has reached harvest size")
-
-    else:
-        if len(pond["sampling_log"]) >= 2:
-            prev = pond["sampling_log"][-2]
-            growth_rate = latest["abw"] - prev["abw"]
-            if growth_rate > 0:
-                days_needed = (target_size - current_abw) / growth_rate
-                st.info(f"Estimated {round(days_needed,1)} days to reach target size")
-            else:
-                st.warning("Growth rate too low to estimate harvest time")
-
-    st.write(f"Current Biomass: {biomass} kg")
-    st.write(f"Current Survival: {survival} %")
-# =====================================================
 # ADVANCED TECHNICIAN PDF EXPORT
 # =====================================================
 

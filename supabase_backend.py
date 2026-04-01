@@ -12,6 +12,8 @@ DB_FILE = BASE_DIR / "farm_data.db"
 JSON_FILE = BASE_DIR / "farm_data.json"
 
 APP_STATE_TABLE = "app_state"
+SUPABASE_URL= https://hdlkeblroveimxaahcyr.supabase.co 
+SUPABASE_ANON_KEY= eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkbGtlYmxyb3ZlaW14YWFoY3lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMTgxOTQsImV4cCI6MjA5MDU5NDE5NH0.YYsNaXNICEpsDutVqtu5qycJU5XDVJGcK9H9orDowjQ
 
 
 def default_payload():
@@ -19,8 +21,8 @@ def default_payload():
 
 
 def _get_supabase_creds():
-    url = st.secrets.get("https://hdlkeblroveimxaahcyr.supabase.co", os.getenv("SUPABASE_URL", "")).strip()
-    anon = st.secrets.get("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhkbGtlYmxyb3ZlaW14YWFoY3lyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMTgxOTQsImV4cCI6MjA5MDU5NDE5NH0.YYsNaXNICEpsDutVqtu5qycJU5XDVJGcK9H9orDowjQ", os.getenv("SUPABASE_ANON_KEY", "")).strip()
+    url = st.secrets.get("SUPABASE_URL", os.getenv("SUPABASE_URL", "")).strip()
+    anon = st.secrets.get("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY", "")).strip()
     return url, anon
 
 

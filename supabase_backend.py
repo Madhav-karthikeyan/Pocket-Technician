@@ -17,11 +17,31 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_FILE = BASE_DIR / "farm_data.db"
 JSON_FILE = BASE_DIR / "farm_data.json"
 
-APP_STATE_TABLE = "app_state"
+MISSING_TABLE_FLAG = "supabase_missing_table_warned"
 
 
 def default_payload():
     return {"farms": {}, "memory": {}}
+
+
+def get_app_state_table() -> str:
+    configured = st.secrets.get("SUPABASE_APP_STATE_TABLE", os.getenv("SUPABASE_APP_STATE_TABLE", "")).strip()
+    return configured or "app_state"
+
+
+def _is_missing_table_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return "pgrst205" in text or "could not find the table" in text
+
+
+def _show_missing_table_help(table_name: str):
+    if st.session_state.get(MISSING_TABLE_FLAG):
+        return
+    st.session_state[MISSING_TABLE_FLAG] = True
+    st.error(
+        f"Supabase table `public.{table_name}` is missing (or not exposed to the API). "
+        "Run `supabase_schema.sql` in the Supabase SQL editor, then refresh this app."
+    )
 
 
 def _get_supabase_creds():
@@ -134,14 +154,40 @@ def _read_legacy_payload():
     return default_payload()
 
 
+def _write_legacy_payload(payload: dict):
+    safe_payload = payload if isinstance(payload, dict) else default_payload()
+    safe_payload.setdefault("farms", {})
+    safe_payload.setdefault("memory", {})
+
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY, payload TEXT NOT NULL)")
+            conn.execute(
+                "INSERT INTO app_state (id, payload) VALUES (1, ?) "
+                "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+                (json.dumps(safe_payload),),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+    try:
+        with JSON_FILE.open("w", encoding="utf-8") as fp:
+            json.dump(safe_payload, fp)
+    except Exception:
+        pass
+
+
 def load_user_payload(user_id: str):
     client = get_supabase_client()
-    if client is None or not user_id:
+    if not user_id:
         return default_payload()
+    if client is None:
+        return _read_legacy_payload()
 
     try:
         response = (
-            client.table(APP_STATE_TABLE)
+            client.table(get_app_state_table())
             .select("payload")
             .eq("user_id", user_id)
             .limit(1)
@@ -158,13 +204,19 @@ def load_user_payload(user_id: str):
         save_user_payload(user_id, legacy)
         return legacy
     except Exception as exc:
+        if _is_missing_table_error(exc):
+            _show_missing_table_help(get_app_state_table())
+            return _read_legacy_payload()
         st.error(f"Failed loading Supabase data: {exc}")
         return default_payload()
 
 
 def save_user_payload(user_id: str, payload: dict):
     client = get_supabase_client()
-    if client is None or not user_id:
+    if not user_id:
+        return
+    if client is None:
+        _write_legacy_payload(payload)
         return
 
     safe_payload = payload if isinstance(payload, dict) else default_payload()
@@ -172,7 +224,7 @@ def save_user_payload(user_id: str, payload: dict):
     safe_payload.setdefault("memory", {})
 
     try:
-        client.table(APP_STATE_TABLE).upsert(
+        client.table(get_app_state_table()).upsert(
             {
                 "user_id": user_id,
                 "payload": safe_payload,
@@ -181,4 +233,8 @@ def save_user_payload(user_id: str, payload: dict):
             on_conflict="user_id",
         ).execute()
     except Exception as exc:
+        if _is_missing_table_error(exc):
+            _show_missing_table_help(get_app_state_table())
+            _write_legacy_payload(safe_payload)
+            return
         st.error(f"Failed saving Supabase data: {exc}")

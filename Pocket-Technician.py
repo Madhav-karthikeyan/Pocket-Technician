@@ -98,6 +98,37 @@ def send_support_email(sender_email: str, subject: str, body: str):
         return False, f"Failed to send email: {e}"
 
 
+def render_contact_support():
+    st.markdown("#### Contact Support")
+    st.caption("Send us your feedback or report an issue. Your message will be delivered as email.")
+
+    with st.form("contact_support_form", clear_on_submit=True):
+        sender_email = st.text_input("Your Email")
+        subject = st.text_input("Subject", value="Feedback")
+        feedback_message = st.text_area(
+            "Feedback / Issue Details",
+            placeholder="Share your feedback, feature request, or issue details...",
+            height=160,
+        )
+        submitted = st.form_submit_button("Send Feedback")
+
+    if submitted:
+        if not sender_email.strip() or not feedback_message.strip():
+            st.error("Please provide your email and feedback details before submitting.")
+            return
+
+        success, message = send_support_email(
+            sender_email=sender_email,
+            subject=subject,
+            body=feedback_message,
+        )
+
+        if success:
+            st.success(message)
+        else:
+            st.error(message)
+
+
 def build_feed_projection_chart(start_doc, days, base_total_feed, frequency, overrides=None):
     """Build a DOC-wise feed schedule projection with optional DOC-level overrides."""
     safe_frequency = max(1, int(frequency))
@@ -1653,6 +1684,10 @@ selected_module = st.sidebar.selectbox(
     options=["Sampling", "Feed Tray AI", "Shrimp Larvae Detection", "Contact Support"],
     key="technician_module",
 )
+
+if selected_module == "Contact Support":
+    render_contact_support()
+    st.stop()
 
 if selected_module == "Shrimp Larvae Detection":
     st.markdown("#### Shrimp Larvae Detection")

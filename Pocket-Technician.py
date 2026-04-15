@@ -159,7 +159,7 @@ def ensure_pond_defaults(ponds: dict, pond_name: str):
 def render_usefulness_suggestion():
     with st.sidebar.expander("💡Knock..Knock", expanded=False):
         st.markdown(
-            "**Suggestion:** Feed, water, animal, environment they all are co-dependent "
+            " Feed, water, animal, environment they all are co-dependent "
             "use PT to see the interdependence "
             "inter-dependence who? Thats on you!."
         )

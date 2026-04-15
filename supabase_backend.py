@@ -39,9 +39,11 @@ def _show_missing_table_help(table_name: str):
     if st.session_state.get(MISSING_TABLE_FLAG):
         return
     st.session_state[MISSING_TABLE_FLAG] = True
-    st.error(
-        f"Supabase table `public.{table_name}` is missing (or not exposed to the API). "
-        "Run `supabase_schema.sql` in the Supabase SQL editor, then refresh this app."
+    # Keep this silent in the UI and gracefully fall back to local storage paths.
+    # A console warning preserves debuggability without interrupting users.
+    print(
+        f"[Supabase] Missing table public.{table_name} (or not exposed to API). "
+        "Using local fallback state."
     )
 
 

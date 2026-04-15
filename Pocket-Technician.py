@@ -157,11 +157,11 @@ def ensure_pond_defaults(ponds: dict, pond_name: str):
 
 
 def render_usefulness_suggestion():
-    with st.sidebar.expander("💡 Make it more useful", expanded=False):
+    with st.sidebar.expander("💡Knock..Knock", expanded=False):
         st.markdown(
-            "**Suggestion:** Add an automated daily action plan that combines "
-            "weather, water quality trends, and feed tray history to generate "
-            "morning/evening task checklists with risk alerts."
+            "**Suggestion:** Feed, water, animal, environment they all are co-dependent "
+            "use PT to see the interdependence "
+            "inter-dependence who? Thats on you!."
         )
         st.caption(
             "Why this helps: technicians get one prioritized to-do list instead of "

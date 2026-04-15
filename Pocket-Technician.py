@@ -129,6 +129,46 @@ def render_contact_support():
             st.error(message)
 
 
+
+
+DEFAULT_POND_TEMPLATE = {
+    "initial_stock": 0,
+    "area": 0.0,
+    "depth": 0.0,
+    "stocking_date": str(date.today()),
+    "feed_log": [],
+    "sampling_log": [],
+}
+
+
+def reset_setup_form():
+    st.session_state["onboarding_done"] = False
+    st.session_state["allow_saved_farm_autoload"] = False
+    st.session_state["setup_farm_name"] = ""
+    st.session_state["setup_pond_name"] = ""
+    st.session_state["setup_location"] = ""
+
+
+def ensure_pond_defaults(ponds: dict, pond_name: str):
+    pond = ponds.setdefault(pond_name, DEFAULT_POND_TEMPLATE.copy())
+    for key, default_value in DEFAULT_POND_TEMPLATE.items():
+        pond.setdefault(key, default_value)
+    return pond
+
+
+def render_usefulness_suggestion():
+    with st.sidebar.expander("💡 Make it more useful", expanded=False):
+        st.markdown(
+            "**Suggestion:** Add an automated daily action plan that combines "
+            "weather, water quality trends, and feed tray history to generate "
+            "morning/evening task checklists with risk alerts."
+        )
+        st.caption(
+            "Why this helps: technicians get one prioritized to-do list instead of "
+            "checking each module separately."
+        )
+
+
 def build_feed_projection_chart(start_doc, days, base_total_feed, frequency, overrides=None):
     """Build a DOC-wise feed schedule projection with optional DOC-level overrides."""
     safe_frequency = max(1, int(frequency))
@@ -1506,42 +1546,6 @@ def render_weather_and_lunar(location):
 #show_tide = st.checkbox("Show High & Low Tide Information")
 #if show_tide:
 
-#    st.subheader("🌊 High & Low Tide Information")
-
-#    tide_url = "https://marine-api.open-meteo.com/v1/marine"
-
-#    tide_params = {
-#        "latitude": lat,
-#        "longitude": lon,
-#        "hourly": "sea_level_height",
-#        "timezone": "auto"
-#    }
-
-#    tide_response = requests.get(tide_url, params=tide_params)
-#    tide_data = tide_response.json()
-
-#    if "hourly" in tide_data:
-
-#        tide_df = pd.DataFrame({
-#            "time": tide_data["hourly"]["time"],
-#            "sea_level": tide_data["hourly"]["sea_level_height"]
-#        })
-
-#        # Convert time column to datetime
-#        tide_df["time"] = pd.to_datetime(tide_df["time"])
-
-#        # Take only next 24 hours
-#        next_24 = tide_df.head(24)
-
-#        # Detect High & Low
-#       high_tide = next_24.loc[next_24["sea_level"].idxmax()]
-#        low_tide = next_24.loc[next_24["sea_level"].idxmin()]
-
-#        st.success(f"🌊 High Tide: {high_tide['time']}  |  Level: {round(high_tide['sea_level'],2)} m")
-#       st.warning(f"🌊 Low Tide: {low_tide['time']}  |  Level: {round(low_tide['sea_level'],2)} m")
-#
-#    else:
-#        st.error("Tide data not available for this location.")
 # =====================================================
 # STREAMLIT UI
 # =====================================================
@@ -1657,22 +1661,12 @@ st.session_state["mode"] = st.sidebar.selectbox(
     options=["Technician", "Virtual Farm"],
     index=0 if st.session_state["mode"] == "Technician" else 1,
 )
-if st.sidebar.button("🔁 Change Farm / Pond", use_container_width=True):
-    st.session_state["onboarding_done"] = False
-    st.session_state["allow_saved_farm_autoload"] = False
-    st.session_state["setup_farm_name"] = ""
-    st.session_state["setup_pond_name"] = ""
-    st.session_state["setup_location"] = ""
-    st.rerun()
-if st.sidebar.button("📍 Change Location", use_container_width=True):
-    st.session_state["onboarding_done"] = False
-    st.session_state["allow_saved_farm_autoload"] = False
-    st.session_state["setup_farm_name"] = ""
-    st.session_state["setup_pond_name"] = ""
-    st.session_state["setup_location"] = ""
+if st.sidebar.button("✏️ Edit Farm / Pond / Location", use_container_width=True):
+    reset_setup_form()
     st.rerun()
 
 st.sidebar.caption("🧠 Memory uses Farm Name, Pond Name, and Location.")
+render_usefulness_suggestion()
 
 if st.session_state["mode"] == "Virtual Farm":
     render_virtual_farm(standalone=False)
@@ -1699,26 +1693,7 @@ pond = None
 if farm_name and pond_name:
     ponds = data["farms"][farm_name]["ponds"]
 
-    ponds.setdefault(
-        pond_name,
-        {
-            "initial_stock": 0,
-            "area": 0.0,
-            "depth": 0.0,
-            "stocking_date": str(date.today()),
-            "feed_log": [],
-            "sampling_log": []
-        }
-    )
-
-    pond = ponds[pond_name]
-
-    pond.setdefault("initial_stock", 0)
-    pond.setdefault("area", 0.0)
-    pond.setdefault("depth", 0.0)
-    pond.setdefault("stocking_date", str(date.today()))
-    pond.setdefault("feed_log", [])
-    pond.setdefault("sampling_log", [])
+    pond = ensure_pond_defaults(ponds, pond_name)
 
 if pond is None:
     st.stop()

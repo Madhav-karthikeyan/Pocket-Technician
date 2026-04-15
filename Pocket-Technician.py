@@ -1369,24 +1369,54 @@ def feed_tray_logic(abw, last_feed, tray_left, consumed_time):
 def render_weather_and_lunar(location):
     st.subheader("🦐 Shrimp Farm Weather & Feeding Logic")
 
+    from geopy.exc import GeocoderServiceError
     from geopy.geocoders import Nominatim
 
-    geolocator = Nominatim(user_agent="shrimp_app")
+    geocode_source = None
+
+    geolocator = Nominatim(user_agent="pocket-technician-weather")
     try:
         location_obj = geolocator.geocode(location, timeout=8)
+        if location_obj:
+            lat = location_obj.latitude
+            lon = location_obj.longitude
+            geocode_source = "Nominatim"
+    except GeocoderServiceError as e:
+        if "429" not in str(e):
+            st.error(f"Unable to fetch location: {e}")
+            show_support_note()
+            return
     except Exception as e:
         st.error(f"Unable to fetch location: {e}")
         show_support_note()
         return
 
-    if not location_obj:
+    if geocode_source is None:
+        fallback_url = "https://geocoding-api.open-meteo.com/v1/search"
+        fallback_params = {
+            "name": location,
+            "count": 1,
+            "language": "en",
+            "format": "json",
+        }
+        try:
+            fallback_response = requests.get(fallback_url, params=fallback_params, timeout=8)
+            fallback_response.raise_for_status()
+            fallback_data = fallback_response.json()
+            fallback_results = fallback_data.get("results", [])
+            if fallback_results:
+                lat = fallback_results[0]["latitude"]
+                lon = fallback_results[0]["longitude"]
+                geocode_source = "Open-Meteo fallback"
+        except (requests.exceptions.RequestException, ValueError):
+            pass
+
+    if geocode_source is None:
         st.error("Location not found (try nearby town) or check the spelling")
+        show_support_note()
         return
 
-    lat = location_obj.latitude
-    lon = location_obj.longitude
-
-    st.success(f"Coordinates: {round(lat,4)}, {round(lon,4)}")
+    st.success(f"Coordinates: {round(lat,4)}, {round(lon,4)} ({geocode_source})")
 
     weather_url = "https://api.open-meteo.com/v1/forecast"
     weather_params = {

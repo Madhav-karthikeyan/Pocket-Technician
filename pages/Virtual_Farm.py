@@ -16,8 +16,8 @@ def _default_data():
     return {"farms": {}}
 
 
-def _load_data():
-    if not render_auth_ui():
+def _load_data(require_auth_ui: bool = True):
+    if require_auth_ui and not render_auth_ui():
         return _default_data()
     user_id = get_user_id()
     if not user_id:
@@ -199,7 +199,7 @@ def render_virtual_farm(standalone: bool = True):
     st.title(" Virtual Farm")
     st.caption("Project culture growth with a simple DEB-style simulation using what-if controls.")
 
-    data = _load_data()
+    data = _load_data(require_auth_ui=standalone)
     farm_names = sorted(data.get("farms", {}).keys())
 
     if not farm_names:

@@ -16,6 +16,7 @@ except Exception:  # supabase package may be unavailable in some deployments
 BASE_DIR = Path(__file__).resolve().parent
 DB_FILE = BASE_DIR / "farm_data.db"
 JSON_FILE = BASE_DIR / "farm_data.json"
+USER_LOG_FILE = BASE_DIR / "user_log.json"
 
 MISSING_TABLE_FLAG = "supabase_missing_table_warned"
 
@@ -70,6 +71,87 @@ def ensure_auth_state():
     st.session_state.setdefault("auth_user", None)
 
 
+def _normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
+
+
+def _local_user_id(email: str) -> str:
+    return f"local::{_normalize_email(email)}"
+
+
+def _is_network_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    keywords = [
+        "name or service not known",
+        "temporary failure in name resolution",
+        "failed to establish a new connection",
+        "connection refused",
+        "connection reset",
+        "network is unreachable",
+        "timed out",
+    ]
+    return any(word in text for word in keywords)
+
+
+def _read_user_log() -> dict:
+    if USER_LOG_FILE.exists():
+        try:
+            with USER_LOG_FILE.open("r", encoding="utf-8") as fp:
+                data = json.load(fp)
+                if isinstance(data, dict):
+                    users = data.get("users")
+                    if isinstance(users, list):
+                        return {"users": users}
+        except Exception:
+            pass
+    return {"users": []}
+
+
+def _write_user_log(data: dict):
+    safe_data = data if isinstance(data, dict) else {"users": []}
+    users = safe_data.get("users")
+    if not isinstance(users, list):
+        safe_data["users"] = []
+    with USER_LOG_FILE.open("w", encoding="utf-8") as fp:
+        json.dump(safe_data, fp, indent=2)
+
+
+def _local_sign_in(email: str, password: str) -> Optional[dict]:
+    target_email = _normalize_email(email)
+    raw_password = (password or "").strip()
+    if not target_email or not raw_password:
+        return None
+
+    for user in _read_user_log()["users"]:
+        if (
+            isinstance(user, dict)
+            and _normalize_email(user.get("email", "")) == target_email
+            and user.get("password") == raw_password
+        ):
+            return {
+                "id": _local_user_id(target_email),
+                "email": target_email,
+                "provider": "local",
+            }
+    return None
+
+
+def _local_sign_up(email: str, password: str) -> tuple[bool, str]:
+    target_email = _normalize_email(email)
+    raw_password = (password or "").strip()
+    if not target_email or not raw_password:
+        return False, "Email and password are required."
+
+    data = _read_user_log()
+    for user in data["users"]:
+        if isinstance(user, dict) and _normalize_email(user.get("email", "")) == target_email:
+            return False, "An account with this email already exists."
+
+    data["users"].append({"email": target_email, "password": raw_password})
+    _write_user_log(data)
+    return True, "Local account created successfully."
+
+
 def get_user_id():
     user = st.session_state.get("auth_user")
     if not user:
@@ -80,48 +162,79 @@ def get_user_id():
 def render_auth_ui() -> bool:
     ensure_auth_state()
     client = get_supabase_client()
-
-    if client is None:
-        if create_client is None:
-            st.error("Supabase SDK is missing. Install the `supabase` package in your environment.")
-        else:
-            st.error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY to Streamlit secrets.")
-        return False
+    supabase_enabled = client is not None
 
     user = st.session_state.get("auth_user")
     if user:
         with st.sidebar:
             st.success(f"Logged in as: {user.get('email', 'Unknown')}")
             if st.button("Logout", use_container_width=True):
-                client.auth.sign_out()
+                if client is not None:
+                    client.auth.sign_out()
                 st.session_state["auth_user"] = None
                 st.rerun()
         return True
 
     st.title("Pocket Technician Login")
+    if create_client is None:
+        st.warning("Supabase SDK is unavailable. Local login mode is enabled.")
+    elif not supabase_enabled:
+        st.warning("Supabase is not configured. Local login mode is enabled.")
+
     login_tab, signup_tab = st.tabs(["Login", "Sign Up"])
 
     with login_tab:
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Password", type="password", key="login_password")
         if st.button("Login", key="login_btn", use_container_width=True):
-            try:
-                response = client.auth.sign_in_with_password({"email": email, "password": password})
-                st.session_state["auth_user"] = response.user.model_dump()
-                st.success("Login successful")
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Login failed: {exc}")
+            if supabase_enabled:
+                try:
+                    response = client.auth.sign_in_with_password({"email": email, "password": password})
+                    st.session_state["auth_user"] = response.user.model_dump()
+                    st.success("Login successful")
+                    st.rerun()
+                except Exception as exc:
+                    if _is_network_error(exc):
+                        local_user = _local_sign_in(email, password)
+                        if local_user:
+                            st.session_state["auth_user"] = local_user
+                            st.warning("Supabase is unreachable. Logged in with local offline account.")
+                            st.rerun()
+                        st.error("Login failed in offline mode. Check your email/password or create a local account in Sign Up.")
+                    else:
+                        st.error(f"Login failed: {exc}")
+            else:
+                local_user = _local_sign_in(email, password)
+                if local_user:
+                    st.session_state["auth_user"] = local_user
+                    st.success("Login successful (local mode)")
+                    st.rerun()
+                else:
+                    st.error("Login failed in local mode. Please check your credentials or create an account.")
 
     with signup_tab:
         email = st.text_input("New Email", key="signup_email")
         password = st.text_input("New Password", type="password", key="signup_password")
         if st.button("Create Account", key="signup_btn", use_container_width=True):
-            try:
-                client.auth.sign_up({"email": email, "password": password})
-                st.success("Signup successful. Verify email if confirmation is enabled, then log in.")
-            except Exception as exc:
-                st.error(f"Signup failed: {exc}")
+            if supabase_enabled:
+                try:
+                    client.auth.sign_up({"email": email, "password": password})
+                    st.success("Signup successful. Verify email if confirmation is enabled, then log in.")
+                except Exception as exc:
+                    if _is_network_error(exc):
+                        ok, message = _local_sign_up(email, password)
+                        if ok:
+                            st.warning("Supabase is unreachable. Created local offline account instead.")
+                        else:
+                            st.error(message)
+                    else:
+                        st.error(f"Signup failed: {exc}")
+            else:
+                ok, message = _local_sign_up(email, password)
+                if ok:
+                    st.success("Signup successful (local mode).")
+                else:
+                    st.error(message)
 
     return False
 

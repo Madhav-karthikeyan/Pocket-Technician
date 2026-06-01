@@ -14,7 +14,10 @@ class OtpService {
 
   final LocalDatabase _database;
   final Map<String, String> _codes = {};
+  Object? _lastPersistenceError;
   final Random _random = Random.secure();
+
+  Object? get lastPersistenceError => _lastPersistenceError;
 
   Future<OtpResult> sendOtp(String rawPhone) async {
     final phone = _normalizePhone(rawPhone);
@@ -37,8 +40,17 @@ class OtpService {
   }) async {
     final normalized = _normalizePhone(phone);
     if (_codes[normalized] != otp.trim()) return false;
-    await _database.upsertUserLogin(normalized, role);
     _codes.remove(normalized);
+
+    try {
+      await _database.upsertUserLogin(normalized, role);
+      _lastPersistenceError = null;
+    } on Object catch (error) {
+      // Do not trap a valid OTP user on the login page if the local database
+      // needs to initialize on the next screen. Dashboard data providers will
+      // surface storage errors separately instead of blocking navigation here.
+      _lastPersistenceError = error;
+    }
     return true;
   }
 

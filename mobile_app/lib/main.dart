@@ -34,7 +34,8 @@ final _router = GoRouter(
   initialLocation: '/login',
   routes: [
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-    GoRoute(path: '/', builder: (context, state) => const DashboardScreen()),
+    GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
+    GoRoute(path: '/dashboard', builder: (context, state) => const DashboardScreen()),
     GoRoute(
       path: '/farms/:farmId',
       builder: (context, state) => FarmLayoutScreen(farmId: state.pathParameters['farmId']!),

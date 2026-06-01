@@ -17,6 +17,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _normalizedPhone;
   String? _debugOtp;
   bool _isSending = false;
+  bool _isVerifying = false;
 
   @override
   void dispose() {
@@ -42,13 +43,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _verifyOtp() async {
     final phone = _normalizedPhone;
-    if (phone == null) return;
-    final ok = await ref.read(otpServiceProvider).verifyOtp(phone: phone, otp: _otpController.text);
-    if (!mounted) return;
-    if (ok) {
-      context.go('/');
-    } else {
-      _showSnack('Invalid OTP. Please check the code and try again.');
+    if (phone == null || _isVerifying) return;
+    setState(() => _isVerifying = true);
+    try {
+      final ok = await ref.read(otpServiceProvider).verifyOtp(phone: phone, otp: _otpController.text);
+      if (!mounted) return;
+      if (ok) {
+        context.go('/dashboard');
+      } else {
+        _showSnack('Invalid OTP. Please check the code and try again.');
+      }
+    } catch (error) {
+      if (mounted) _showSnack('OTP verification failed: $error');
+    } finally {
+      if (mounted) setState(() => _isVerifying = false);
     }
   }
 
@@ -133,9 +141,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          FilledButton(
-                            onPressed: _verifyOtp,
-                            child: const Text('Verify and open dashboard'),
+                          FilledButton.icon(
+                            onPressed: _isVerifying ? null : _verifyOtp,
+                            icon: _isVerifying
+                                ? const SizedBox.square(dimension: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Icon(Icons.verified_user_rounded),
+                            label: const Text('Verify and open dashboard'),
                           ),
                         ],
                       ],

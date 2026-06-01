@@ -26,10 +26,18 @@ final farmProvider = FutureProvider.family<Farm, String>((ref, farmId) {
   return ref.watch(databaseProvider).farm(farmId);
 });
 
+final allPondSnapshotsProvider = FutureProvider<List<PondSnapshot>>((ref) {
+  return ref.watch(databaseProvider).allPondSnapshots();
+});
+
 final pondSnapshotsProvider = FutureProvider.family<List<PondSnapshot>, String>((ref, farmId) {
   return ref.watch(databaseProvider).pondSnapshots(farmId);
 });
 
 final pondSnapshotProvider = FutureProvider.family<PondSnapshot, String>((ref, pondId) {
   return ref.watch(databaseProvider).pondSnapshot(pondId);
+});
+
+final pondDetailProvider = FutureProvider.family<PondDetailBundle, String>((ref, pondId) {
+  return ref.watch(databaseProvider).pondDetail(pondId);
 });

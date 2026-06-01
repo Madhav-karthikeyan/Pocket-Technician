@@ -147,7 +147,8 @@ Mobile architecture highlights:
 - Sqflite local database storage instead of Supabase
 - Phone OTP login flow with a local debug OTP service and a production SMS-provider hook
 - CEO dashboard for farmer, farm, pond, biomass, survival, and risk visibility
-- Tappable farm-layout navigation so pond data is opened from the physical pond layout instead of slider-based pond selection
+- Tappable and draggable farm-layout navigation so pond data is opened from the physical pond layout instead of slider-based pond selection
+- On-device technician modules for setup, feed, sampling, water quality, feed tray decisions, profit/carrying-capacity checks, virtual farm summaries, and locally stored reports
 
 Run the mobile app with:
 

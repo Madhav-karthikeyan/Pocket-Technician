@@ -58,7 +58,7 @@ class FarmLayoutScreen extends ConsumerWidget {
         padding: EdgeInsets.all(20),
         child: Text(
           'This mobile conversion stores each pond with normalized x/y/width/height coordinates. '
-          'The next production step can add drag handles or import a satellite/site drawing, while the current app already uses the layout as the primary navigation model.',
+          'Drag a pond card to adjust its position. Tap any pond to open details. Coordinates are saved in the phone database, so the farm layout remains available offline without Supabase.',
         ),
       ),
     );
@@ -103,7 +103,7 @@ class _PondLayoutCanvas extends StatelessWidget {
   }
 }
 
-class _PondTile extends StatelessWidget {
+class _PondTile extends ConsumerWidget {
   const _PondTile({required this.snapshot, required this.canvasWidth, required this.canvasHeight});
 
   final PondSnapshot snapshot;
@@ -111,7 +111,7 @@ class _PondTile extends StatelessWidget {
   final double canvasHeight;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final pond = snapshot.pond;
     final healthy = snapshot.riskLabel == 'Healthy';
     return Positioned(
@@ -119,9 +119,15 @@ class _PondTile extends StatelessWidget {
       top: pond.y * canvasHeight,
       width: pond.width * canvasWidth,
       height: pond.height * canvasHeight,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+      child: GestureDetector(
         onTap: () => context.push('/ponds/${pond.id}'),
+        onPanUpdate: (details) async {
+          final newX = (pond.x + details.delta.dx / canvasWidth).clamp(0.0, 1.0 - pond.width).toDouble();
+          final newY = (pond.y + details.delta.dy / canvasHeight).clamp(0.0, 1.0 - pond.height).toDouble();
+          await ref.read(databaseProvider).updatePondLayout(pondId: pond.id, x: newX, y: newY, width: pond.width, height: pond.height);
+          ref.invalidate(pondSnapshotsProvider(pond.farmId));
+          ref.invalidate(allPondSnapshotsProvider);
+        },
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),

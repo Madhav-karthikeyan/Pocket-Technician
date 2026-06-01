@@ -18,6 +18,11 @@ class DashboardScreen extends ConsumerWidget {
         title: const Text('CEO Command Center'),
         actions: [
           IconButton(
+            tooltip: 'Technician modules',
+            onPressed: () => context.push('/modules'),
+            icon: const Icon(Icons.apps_rounded),
+          ),
+          IconButton(
             onPressed: () => ref.invalidate(ceoMetricsProvider),
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -37,7 +42,7 @@ class DashboardScreen extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
             ),
             const SizedBox(height: 20),
-            Text('Farmer database', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            Row(children: [Expanded(child: Text('Farmer database', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800))), FilledButton.icon(onPressed: () => context.push('/modules'), icon: const Icon(Icons.add_rounded), label: const Text('Add'))]),
             const SizedBox(height: 12),
             farmers.when(
               data: (items) => Column(children: items.map((farmer) => _FarmerCard(farmer: farmer)).toList()),

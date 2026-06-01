@@ -15,7 +15,9 @@ This folder contains a Flutter-first mobile rewrite of the Streamlit Pocket Tech
 - Supabase is removed from the mobile workflow.
 - Login uses a phone-number OTP service abstraction. The current local build generates an OTP on device and shows it in debug mode; connect an SMS provider in `OtpService.sendOtp` for production delivery.
 - CEO dashboard summarizes farmers, farms, ponds, biomass, survival, and risk status from the local database.
-- Farm pages use a tappable pond layout canvas instead of slider-based pond switching. Each pond stores layout coordinates and opens its own details screen from the map.
+- Technician modules cover farm setup, feed logs, sampling/growth analytics, water quality, feed tray decisions, profit/carrying-capacity checks, virtual farm summaries, and local reports.
+- Farm pages use a tappable and draggable pond layout canvas instead of slider-based pond switching. Each pond stores layout coordinates and opens its own details screen from the map.
+- Pond reports are generated as local on-device records, keeping farmer reports on the phone rather than in Supabase/cloud storage.
 
 ## Run
 

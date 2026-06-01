@@ -134,3 +134,27 @@ Creating a practical, technician-grade aquaculture intelligence system
 for modern shrimp farming.
 
 ------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+FLUTTER MOBILE CONVERSION
+
+A Flutter mobile-first rewrite has been scaffolded in `mobile_app/` for Android and iOS.
+
+Mobile architecture highlights:
+
+- Flutter Material 3 UI with Riverpod state management and GoRouter navigation
+- Sqflite local database storage instead of Supabase
+- Phone OTP login flow with a local debug OTP service and a production SMS-provider hook
+- CEO dashboard for farmer, farm, pond, biomass, survival, and risk visibility
+- Tappable farm-layout navigation so pond data is opened from the physical pond layout instead of slider-based pond selection
+
+Run the mobile app with:
+
+```bash
+cd mobile_app
+flutter pub get
+flutter run
+```
+
+Production SMS delivery can be connected in `mobile_app/lib/services/otp_service.dart` without reintroducing Supabase.

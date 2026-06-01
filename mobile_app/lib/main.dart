@@ -6,12 +6,9 @@ import 'screens/dashboard_screen.dart';
 import 'screens/farm_layout_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/pond_detail_screen.dart';
-import 'screens/technician_modules_screen.dart';
-import 'services/database_factory.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await configureDatabaseFactory();
   runApp(const ProviderScope(child: PocketTechnicianApp()));
 }
 
@@ -39,7 +36,6 @@ final _router = GoRouter(
     GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
     GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
     GoRoute(path: '/dashboard', builder: (context, state) => const DashboardScreen()),
-    GoRoute(path: '/modules', builder: (context, state) => const TechnicianModulesScreen()),
     GoRoute(
       path: '/farms/:farmId',
       builder: (context, state) => FarmLayoutScreen(farmId: state.pathParameters['farmId']!),

@@ -18,11 +18,6 @@ class DashboardScreen extends ConsumerWidget {
         title: const Text('CEO Command Center'),
         actions: [
           IconButton(
-            tooltip: 'Technician modules',
-            onPressed: () => context.push('/modules'),
-            icon: const Icon(Icons.apps_rounded),
-          ),
-          IconButton(
             onPressed: () => ref.invalidate(ceoMetricsProvider),
             icon: const Icon(Icons.refresh_rounded),
           ),
@@ -40,16 +35,6 @@ class DashboardScreen extends ConsumerWidget {
               data: (value) => _MetricsGrid(metrics: value),
               error: (error, _) => Text('Unable to load metrics: $error'),
               loading: () => const Center(child: CircularProgressIndicator()),
-            ),
-            const SizedBox(height: 20),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.engineering_rounded),
-                title: const Text('Open technician modules', style: TextStyle(fontWeight: FontWeight.w800)),
-                subtitle: const Text('Setup, feed, sampling, water quality, feed tray, profit, virtual farm, reports, AI hooks'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => context.push('/modules'),
-              ),
             ),
             const SizedBox(height: 20),
             Text('Farmer database', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),

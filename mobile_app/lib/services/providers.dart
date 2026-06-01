@@ -33,7 +33,3 @@ final pondSnapshotsProvider = FutureProvider.family<List<PondSnapshot>, String>(
 final pondSnapshotProvider = FutureProvider.family<PondSnapshot, String>((ref, pondId) {
   return ref.watch(databaseProvider).pondSnapshot(pondId);
 });
-
-final allPondSnapshotsProvider = FutureProvider<List<PondSnapshot>>((ref) {
-  return ref.watch(databaseProvider).allPondSnapshots();
-});

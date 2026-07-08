@@ -19,7 +19,7 @@ class LocalDatabase {
     final dbPath = await getDatabasesPath();
     final db = await openDatabase(
       p.join(dbPath, 'pocket_technician.db'),
-      version: 2,
+      version: 3,
       onCreate: _createSchema,
       onUpgrade: (db, oldVersion, newVersion) async {
         await db.execute('DROP TABLE IF EXISTS reports');
@@ -40,13 +40,6 @@ class LocalDatabase {
 
   Future<void> _createSchema(Database db, int version) async {
     await db.execute('PRAGMA foreign_keys = ON');
-    await db.execute('''
-      CREATE TABLE users(
-        phone TEXT PRIMARY KEY,
-        role TEXT NOT NULL,
-        last_login_at TEXT
-      )
-    ''');
     await db.execute('''
       CREATE TABLE farmers(
         id TEXT PRIMARY KEY,
@@ -185,10 +178,6 @@ class LocalDatabase {
         'weekly_fcr': fcr,
       };
 
-  Future<void> upsertUserLogin(String phone, String role) async {
-    final db = await database;
-    await db.insert('users', {'phone': phone, 'role': role, 'last_login_at': DateTime.now().toIso8601String()}, conflictAlgorithm: ConflictAlgorithm.replace);
-  }
 
   Future<List<Farmer>> farmers() async {
     final db = await database;

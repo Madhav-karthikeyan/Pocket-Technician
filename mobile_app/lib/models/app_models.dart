@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 class Farmer {
   const Farmer({
     required this.id,
@@ -231,6 +233,36 @@ class LocalReport {
       );
 }
 
+class FeedingChartPlan {
+  const FeedingChartPlan({
+    required this.doc,
+    required this.stockUnits,
+    required this.baseFeedKg,
+    required this.preSamplingFeedKg,
+    required this.survivalAdjustedFeedKg,
+    required this.recommendedFeedKg,
+    required this.feedSizeLabel,
+    required this.samplingSuggestion,
+    required this.weatherSuggestion,
+    required this.carryingCapacitySuggestion,
+    required this.profitToday,
+    required this.poTeSuggestion,
+  });
+
+  final int doc;
+  final double stockUnits;
+  final double baseFeedKg;
+  final double preSamplingFeedKg;
+  final double survivalAdjustedFeedKg;
+  final double recommendedFeedKg;
+  final String feedSizeLabel;
+  final String samplingSuggestion;
+  final String weatherSuggestion;
+  final String carryingCapacitySuggestion;
+  final double profitToday;
+  final String poTeSuggestion;
+}
+
 class PondSnapshot {
   const PondSnapshot({
     required this.pond,
@@ -254,6 +286,69 @@ class PondSnapshot {
 
   double get pondVolumeM3 => pond.areaSqm * pond.depthM;
   double get biomassDensityKgM3 => pondVolumeM3 <= 0 ? 0 : biomassKg / pondVolumeM3;
+
+  FeedingChartPlan feedingChartPlan({
+    DateTime? asOf,
+    double feedPricePerKg = 45,
+    double shrimpPricePerKg = 260,
+    double overheadToday = 0,
+  }) {
+    final date = asOf ?? DateTime.now();
+    final doc = math.max(1, date.difference(pond.stockingDate).inDays + 1);
+    final stockUnits = pond.initialStock / 10000;
+    final baseFeedKg = stockUnits;
+    final preSamplingFeedKg = baseFeedKg + math.max(0, doc - 1) * 0.25;
+    final survivalFactor = latestSampling == null ? 1.0 : (latestSurvival / 100).clamp(0.01, 1.0).toDouble();
+    final survivalAdjustedFeedKg = preSamplingFeedKg * survivalFactor;
+    final waterReduction = _waterFeedReductionFactor;
+    final recommendedFeedKg = survivalAdjustedFeedKg * waterReduction;
+    final revenueToday = biomassKg * shrimpPricePerKg;
+    final feedCost = feedKg * feedPricePerKg;
+    final profitToday = revenueToday - feedCost - overheadToday;
+    final feedSizeLabel = _feedSizeForDoc(doc);
+    final samplingSuggestion = latestSampling == null
+        ? 'Before first sampling, use the starter chart: 1 kg per 10,000 shrimp plus 250 g/day.'
+        : recommendedFeedKg < preSamplingFeedKg * .9
+            ? 'Sampling indicates survival-adjusted feed is lower than the starter chart; watch tray leftovers and avoid overfeeding.'
+            : 'Sampling supports the current feed path; increase only when tray, growth, and water are stable.';
+    final weatherSuggestion = waterReduction < 1
+        ? 'Reduce feed 10–20% during low DO, ammonia/nitrite stress, heavy rain, cloudy periods, or poor location-based weather alerts.'
+        : 'No water-linked weather reduction is active; keep geolocation weather checks connected before each feeding.';
+    final carryingCapacitySuggestion = biomassDensityKgM3 > .65
+        ? 'Carrying capacity is tight; increase aeration, exchange water if needed, and do not push feed until density risk drops.'
+        : 'Carrying capacity is within the current local threshold; feed, water, survival, and profit modules can keep scaling together.';
+    final poTeSuggestion = 'Po-te dummy supervisor: connect feeding chart, sampling survival, feed tray, water, weather, biomass, carrying capacity, and profit before approving today’s feed.';
+    return FeedingChartPlan(
+      doc: doc,
+      stockUnits: stockUnits,
+      baseFeedKg: baseFeedKg,
+      preSamplingFeedKg: preSamplingFeedKg,
+      survivalAdjustedFeedKg: survivalAdjustedFeedKg,
+      recommendedFeedKg: recommendedFeedKg,
+      feedSizeLabel: feedSizeLabel,
+      samplingSuggestion: samplingSuggestion,
+      weatherSuggestion: weatherSuggestion,
+      carryingCapacitySuggestion: carryingCapacitySuggestion,
+      profitToday: profitToday,
+      poTeSuggestion: poTeSuggestion,
+    );
+  }
+
+  double get _waterFeedReductionFactor {
+    final water = latestWater;
+    if (water == null) return 1;
+    if (water.dissolvedOxygen < 3.5 || water.ammonia > .8 || water.nitrite > .8) return .8;
+    if (water.dissolvedOxygen < 4 || water.ammonia > .5 || water.nitrite > .5) return .9;
+    return 1;
+  }
+
+  String _feedSizeForDoc(int doc) {
+    if (doc <= 10) return 'Powder / crumble 0.3–0.5 mm';
+    if (doc <= 25) return 'Crumble 0.5–0.8 mm';
+    if (doc <= 45) return 'Pellet 1.0–1.2 mm';
+    if (doc <= 70) return 'Pellet 1.4–1.8 mm';
+    return 'Pellet 2.0 mm+';
+  }
 }
 
 class PondDetailBundle {

@@ -1424,28 +1424,6 @@ def total_feed_consumed(pond):
     return sum(float(entry.get("feed", 0) or 0) for entry in pond.get("feed_log", []))
 
 
-def build_day1_feeding_chart(pond, current_doc=None, survival_factor=1.0, weather_factor=1.0):
-    current_doc = current_doc or doc_calc(pond["stocking_date"], date.today())
-    initial_stock = float(pond.get("initial_stock", 0) or 0)
-    base_feed = initial_stock / 10000 if initial_stock > 0 else 0
-    accumulated_chart_feed = 0.0
-    rows = []
-
-    for doc in range(1, max(1, current_doc) + 1):
-        chart_feed = base_feed + (doc - 1) * 0.25
-        adjusted_feed = chart_feed * survival_factor * weather_factor
-        accumulated_chart_feed += chart_feed
-        rows.append({
-            "DOC": doc,
-            "Feed size": feed_size_for_doc(doc),
-            "Chart feed kg/day": round(chart_feed, 2),
-            "Adjusted kg/day": round(adjusted_feed, 2),
-            "Accumulated chart kg": round(accumulated_chart_feed, 2),
-        })
-
-    return pd.DataFrame(rows)
-
-
 def calculate_feeding_chart_plan(pond, feed_price_per_kg=90, shrimp_price_per_kg=320, overhead_today=0, weather_factor=None):
     today_doc = doc_calc(pond["stocking_date"], date.today())
     initial_stock = float(pond.get("initial_stock", 0) or 0)
@@ -1468,60 +1446,52 @@ def calculate_feeding_chart_plan(pond, feed_price_per_kg=90, shrimp_price_per_kg
     volume = float(pond.get("area", 0) or 0) * float(pond.get("depth", 0) or 0)
     biomass_density = biomass / volume if volume > 0 else 0
     accumulated_feed = total_feed_consumed(pond)
-    gross_value_today = biomass * shrimp_price_per_kg
-    feed_cost_so_far = accumulated_feed * feed_price_per_kg
-    net_if_sold_today = gross_value_today - feed_cost_so_far - overhead_today
-    day1_chart = build_day1_feeding_chart(pond, today_doc, survival_factor, active_weather_factor)
-    chart_accumulated_feed = float(day1_chart["Accumulated chart kg"].iloc[-1]) if not day1_chart.empty else 0
+    profit_today = (biomass * shrimp_price_per_kg) - (accumulated_feed * feed_price_per_kg) - overhead_today
 
     if latest is None:
-        feeding_suggestion = "Follow starter chart until 1st sampling; confirm every meal with tray response."
+        sampling_note = "Before 1st sampling: follow 1 kg/10,000 shrimp and add 250 g/day; confirm with tray response."
     elif recommended_feed < pre_sampling_feed * 0.9:
-        feeding_suggestion = "Reduce to survival/weather adjusted feed; possible excess feed after sampling."
+        sampling_note = "Sampling/survival indicates possible excess feed. Reduce to survival-adjusted chart and verify tray leftovers."
     else:
-        feeding_suggestion = "Maintain chart path; increase only when tray, growth, survival, and water agree."
+        sampling_note = "Sampling supports the current path. Increase only when growth, survival, tray, and water are stable."
 
-    weather_suggestion = (
-        "Apply weather reduction now; keep aeration ready and re-check trays."
-        if active_weather_factor < 1
-        else "No active weather reduction; keep checking geolocation forecast before feeding."
-    )
-    carrying_suggestion = (
+    if active_weather_factor < 1:
+        weather_note = "Weather/geolocation logic is asking for feed reduction. Keep aeration ready and re-check trays."
+    else:
+        weather_note = "No active weather reduction. Keep checking geolocation forecast before feeding."
+
+    carrying_note = (
         "Carrying capacity is tight; do not push feed without aeration/water correction."
         if biomass_density > 0.65
-        else "Carrying capacity is within the current local threshold."
+        else "Carrying capacity is within the current local threshold, but keep biomass, FCR, and water connected."
     )
+
     po_te_note = (
-        "Po-te dummy supervisor: I will later learn from feeding chart, sampling, feed tray, weather, "
-        "biomass, carrying capacity, and economics. For now I only flag whether these modules agree."
+        "Po-te dummy supervisor: feeding chart, sampling survival, feed tray, weather, biomass, "
+        "carrying capacity, feed cost, overheads, and profit must agree before today’s feed is approved."
     )
 
     return {
-        "doc": today_doc,
-        "base_feed": round(base_feed, 3),
-        "chart_feed": round(pre_sampling_feed, 3),
-        "survival_adjusted_feed": round(survival_adjusted_feed, 3),
-        "recommended_feed": round(recommended_feed, 3),
-        "feed_size": feed_size_for_doc(today_doc),
-        "survival_pct": round(survival_pct, 2),
-        "biomass": round(biomass, 2),
-        "biomass_density": round(biomass_density, 3),
-        "actual_feed_consumed": round(accumulated_feed, 2),
-        "chart_accumulated_feed": round(chart_accumulated_feed, 2),
-        "gross_value_today": round(gross_value_today, 0),
-        "feed_cost_so_far": round(feed_cost_so_far, 0),
-        "net_if_sold_today": round(net_if_sold_today, 0),
-        "feeding_suggestion": feeding_suggestion,
-        "weather_suggestion": weather_suggestion,
-        "carrying_suggestion": carrying_suggestion,
-        "po_te_suggestion": po_te_note,
-        "day1_chart": day1_chart,
+        "DOC": today_doc,
+        "Base feed (kg/day)": round(base_feed, 3),
+        "Pre-sampling chart feed (kg/day)": round(pre_sampling_feed, 3),
+        "Survival adjusted feed (kg/day)": round(survival_adjusted_feed, 3),
+        "Weather adjusted feed (kg/day)": round(recommended_feed, 3),
+        "Feed size": feed_size_for_doc(today_doc),
+        "Survival % used": round(survival_pct, 2),
+        "Biomass density kg/m³": round(biomass_density, 3),
+        "Feed consumed so far (kg)": round(accumulated_feed, 2),
+        "Profit today estimate": round(profit_today, 0),
+        "Sampling suggestion": sampling_note,
+        "Weather suggestion": weather_note,
+        "Carrying capacity suggestion": carrying_note,
+        "Po-te suggestion": po_te_note,
     }
 
 
 def render_feeding_chart_module(pond, location):
-    st.markdown("#### Feeding Chart")
-    st.caption("Separated views for feeding suggestion, day-1 chart, sell-today value, and Po-te.")
+    st.markdown("#### Feeding Chart + Po-te")
+    st.caption("Connected local decision support: stock → feed chart → sampling → weather → carrying capacity → profit.")
 
     feed_price = st.number_input("Feed price / kg", min_value=0.0, value=90.0, key="feeding_chart_feed_price")
     shrimp_price = st.number_input("Shrimp price / kg today", min_value=0.0, value=320.0, key="feeding_chart_shrimp_price")
@@ -1534,35 +1504,15 @@ def render_feeding_chart_module(pond, location):
         overhead_today=overhead_today,
     )
 
-    st.subheader("1) Feeding suggestion")
     c1, c2, c3 = st.columns(3)
-    c1.metric("Today chart feed", f"{plan['chart_feed']:.2f} kg")
-    c2.metric("Suggested feed", f"{plan['recommended_feed']:.2f} kg")
-    c3.metric("Feed size", plan["feed_size"])
-    essential_df = pd.DataFrame([{
-        "DOC": plan["doc"],
-        "Survival %": plan["survival_pct"],
-        "Chart kg/day": plan["chart_feed"],
-        "Suggested kg/day": plan["recommended_feed"],
-        "Accumulated chart kg": plan["chart_accumulated_feed"],
-    }])
-    st.dataframe(essential_df, use_container_width=True, hide_index=True)
-    st.info(plan["feeding_suggestion"])
-    st.caption(plan["weather_suggestion"])
+    c1.metric("Chart feed", f"{plan['Pre-sampling chart feed (kg/day)']:.2f} kg/day")
+    c2.metric("Recommended feed", f"{plan['Weather adjusted feed (kg/day)']:.2f} kg/day")
+    c3.metric("Profit today", f"₹{plan['Profit today estimate']:.0f}")
 
-    st.subheader("2) Feeding chart from Day 1")
-    st.dataframe(plan["day1_chart"], use_container_width=True, hide_index=True)
-
-    st.subheader("3) If I sell my shrimp today")
-    s1, s2, s3 = st.columns(3)
-    s1.metric("Current biomass", f"{plan['biomass']:.1f} kg")
-    s2.metric("Gross sale value", f"₹{plan['gross_value_today']:.0f}")
-    s3.metric("Net after feed + overheads", f"₹{plan['net_if_sold_today']:.0f}")
-    st.caption(f"Feed consumed so far: {plan['actual_feed_consumed']:.2f} kg | Feed cost so far: ₹{plan['feed_cost_so_far']:.0f}")
-    st.caption(plan["carrying_suggestion"])
-
-    st.subheader("4) Po-te local AI")
-    st.success(plan["po_te_suggestion"])
+    st.dataframe(pd.DataFrame([plan]), use_container_width=True)
+    st.info(plan["Sampling suggestion"])
+    st.warning(plan["Weather suggestion"] if "reduction" in plan["Weather suggestion"].lower() else plan["Carrying capacity suggestion"])
+    st.success(plan["Po-te suggestion"])
 
     if location:
         with st.expander("Linked geolocation/weather feeding suggestion", expanded=False):

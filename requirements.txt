@@ -8,6 +8,3 @@ astral
 geopy
 opencv-python-headless
 numpy
-
-
-supabase

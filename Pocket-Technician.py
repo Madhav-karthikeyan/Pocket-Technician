@@ -26,7 +26,7 @@ from reportlab.lib.pagesizes import A4
 from pages.Virtual_Farm import render_virtual_farm
 from pages.Shrimp_Larvae_Detection import render_shrimp_larvae_detection
 from pages.Feed_Tray_AI import render_feed_tray_ai
-from supabase_backend import get_user_id, load_user_payload, render_auth_ui, save_user_payload
+from supabase_backend import get_user_id, load_user_payload, save_user_payload
 
 
 
@@ -1172,14 +1172,9 @@ REFERENCE_FEED_CHART = {
 }
 
 # =====================================================
-# STORAGE (SUPABASE + USER SCOPING)
+# STORAGE (LOCAL APP STATE, NO LOGIN/CLOUD)
 # =====================================================
-if not render_auth_ui():
-    st.stop()
-
 current_user_id = get_user_id()
-if not current_user_id:
-    st.stop()
 
 if "data" not in st.session_state or st.session_state.get("data_user_id") != current_user_id:
     st.session_state.data = load_user_payload(current_user_id)
@@ -1406,6 +1401,125 @@ def feed_tray_logic(abw, last_feed, tray_left, consumed_time):
         "decision": decision
     }
 
+
+
+def feed_size_for_doc(doc):
+    if doc <= 10:
+        return "Powder / crumble 0.3–0.5 mm"
+    if doc <= 25:
+        return "Crumble 0.5–0.8 mm"
+    if doc <= 45:
+        return "Pellet 1.0–1.2 mm"
+    if doc <= 70:
+        return "Pellet 1.4–1.8 mm"
+    return "Pellet 2.0 mm+"
+
+
+def latest_sampling_record(pond):
+    logs = pond.get("sampling_log", [])
+    return logs[-1] if logs else None
+
+
+def total_feed_consumed(pond):
+    return sum(float(entry.get("feed", 0) or 0) for entry in pond.get("feed_log", []))
+
+
+def calculate_feeding_chart_plan(pond, feed_price_per_kg=90, shrimp_price_per_kg=320, overhead_today=0, weather_factor=None):
+    today_doc = doc_calc(pond["stocking_date"], date.today())
+    initial_stock = float(pond.get("initial_stock", 0) or 0)
+    stock_units_10k = initial_stock / 10000 if initial_stock > 0 else 0
+    base_feed = stock_units_10k
+    pre_sampling_feed = base_feed + max(0, today_doc - 1) * 0.25
+
+    latest = latest_sampling_record(pond)
+    survival_pct = float(get_survival_value(latest, 100) if latest else 100)
+    survival_factor = max(0.01, min(survival_pct / 100, 1.0))
+    survival_adjusted_feed = pre_sampling_feed * survival_factor
+
+    active_weather_factor = weather_factor
+    if active_weather_factor is None:
+        active_weather_factor = float(st.session_state.get("weather_feed_factor", 1.0) or 1.0)
+    active_weather_factor = max(0.5, min(active_weather_factor, 1.0))
+    recommended_feed = survival_adjusted_feed * active_weather_factor
+
+    biomass = float((latest or {}).get("biomass", 0) or 0)
+    volume = float(pond.get("area", 0) or 0) * float(pond.get("depth", 0) or 0)
+    biomass_density = biomass / volume if volume > 0 else 0
+    accumulated_feed = total_feed_consumed(pond)
+    profit_today = (biomass * shrimp_price_per_kg) - (accumulated_feed * feed_price_per_kg) - overhead_today
+
+    if latest is None:
+        sampling_note = "Before 1st sampling: follow 1 kg/10,000 shrimp and add 250 g/day; confirm with tray response."
+    elif recommended_feed < pre_sampling_feed * 0.9:
+        sampling_note = "Sampling/survival indicates possible excess feed. Reduce to survival-adjusted chart and verify tray leftovers."
+    else:
+        sampling_note = "Sampling supports the current path. Increase only when growth, survival, tray, and water are stable."
+
+    if active_weather_factor < 1:
+        weather_note = "Weather/geolocation logic is asking for feed reduction. Keep aeration ready and re-check trays."
+    else:
+        weather_note = "No active weather reduction. Keep checking geolocation forecast before feeding."
+
+    carrying_note = (
+        "Carrying capacity is tight; do not push feed without aeration/water correction."
+        if biomass_density > 0.65
+        else "Carrying capacity is within the current local threshold, but keep biomass, FCR, and water connected."
+    )
+
+    po_te_note = (
+        "Po-te dummy supervisor: feeding chart, sampling survival, feed tray, weather, biomass, "
+        "carrying capacity, feed cost, overheads, and profit must agree before today’s feed is approved."
+    )
+
+    return {
+        "DOC": today_doc,
+        "Base feed (kg/day)": round(base_feed, 3),
+        "Pre-sampling chart feed (kg/day)": round(pre_sampling_feed, 3),
+        "Survival adjusted feed (kg/day)": round(survival_adjusted_feed, 3),
+        "Weather adjusted feed (kg/day)": round(recommended_feed, 3),
+        "Feed size": feed_size_for_doc(today_doc),
+        "Survival % used": round(survival_pct, 2),
+        "Biomass density kg/m³": round(biomass_density, 3),
+        "Feed consumed so far (kg)": round(accumulated_feed, 2),
+        "Profit today estimate": round(profit_today, 0),
+        "Sampling suggestion": sampling_note,
+        "Weather suggestion": weather_note,
+        "Carrying capacity suggestion": carrying_note,
+        "Po-te suggestion": po_te_note,
+    }
+
+
+def render_feeding_chart_module(pond, location):
+    st.markdown("#### Feeding Chart + Po-te")
+    st.caption("Connected local decision support: stock → feed chart → sampling → weather → carrying capacity → profit.")
+
+    feed_price = st.number_input("Feed price / kg", min_value=0.0, value=90.0, key="feeding_chart_feed_price")
+    shrimp_price = st.number_input("Shrimp price / kg today", min_value=0.0, value=320.0, key="feeding_chart_shrimp_price")
+    overhead_today = st.number_input("Today overheads", min_value=0.0, value=0.0, key="feeding_chart_overheads")
+
+    plan = calculate_feeding_chart_plan(
+        pond,
+        feed_price_per_kg=feed_price,
+        shrimp_price_per_kg=shrimp_price,
+        overhead_today=overhead_today,
+    )
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Chart feed", f"{plan['Pre-sampling chart feed (kg/day)']:.2f} kg/day")
+    c2.metric("Recommended feed", f"{plan['Weather adjusted feed (kg/day)']:.2f} kg/day")
+    c3.metric("Profit today", f"₹{plan['Profit today estimate']:.0f}")
+
+    st.dataframe(pd.DataFrame([plan]), use_container_width=True)
+    st.info(plan["Sampling suggestion"])
+    st.warning(plan["Weather suggestion"] if "reduction" in plan["Weather suggestion"].lower() else plan["Carrying capacity suggestion"])
+    st.success(plan["Po-te suggestion"])
+
+    if location:
+        with st.expander("Linked geolocation/weather feeding suggestion", expanded=False):
+            render_weather_and_lunar(location)
+    else:
+        st.info("Set location in setup to link weather/geolocation feed reduction.")
+
 def render_weather_and_lunar(location):
     st.subheader("🦐 Shrimp Farm Weather & Feeding Logic")
 
@@ -1507,16 +1621,21 @@ def render_weather_and_lunar(location):
 
     st.subheader("Feeding Recommendation")
 
+    weather_feed_factor = 1.0
     if current_temp > 34:
+        weather_feed_factor = 0.85
         st.warning("🔥 High heat → Reduce feed by 15%")
     elif current_temp < 26:
+        weather_feed_factor = 0.75
         st.warning("❄ Low temperature → Reduce feed by 25%")
     elif next_24_rain > 20:
+        weather_feed_factor = 0.80
         st.warning("🌧 Heavy rain forecast → Reduce feed by 20% before rain")
     elif current_wind > 20:
         st.success("💨 Good wind mixing → Normal feeding")
     else:
         st.success("✅ Normal feeding schedule")
+    st.session_state["weather_feed_factor"] = weather_feed_factor
 
     daily_df = pd.DataFrame({
         "Date": weather["daily"]["time"],
@@ -1705,7 +1824,7 @@ if st.session_state["mode"] == "Virtual Farm":
 st.sidebar.subheader("Technician Modules")
 selected_module = st.sidebar.selectbox(
     "Select Technician Section",
-    options=["Sampling", "Feed Tray AI", "Shrimp Larvae Detection", "Contact Support"],
+    options=["Sampling", "Feeding Chart / Po-te", "Feed Tray AI", "Shrimp Larvae Detection", "Contact Support"],
     key="technician_module",
 )
 
@@ -1726,6 +1845,10 @@ if farm_name and pond_name:
     pond = ensure_pond_defaults(ponds, pond_name)
 
 if pond is None:
+    st.stop()
+
+if selected_module == "Feeding Chart / Po-te":
+    render_feeding_chart_module(pond, location)
     st.stop()
 
 if selected_module == "Feed Tray AI":

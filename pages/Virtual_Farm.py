@@ -9,7 +9,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-from supabase_backend import get_user_id, load_user_payload, render_auth_ui, save_user_payload
+from supabase_backend import get_user_id, load_user_payload, save_user_payload
 
 
 def _default_data():
@@ -17,8 +17,6 @@ def _default_data():
 
 
 def _load_data(require_auth_ui: bool = True):
-    if require_auth_ui and not render_auth_ui():
-        return _default_data()
     user_id = get_user_id()
     if not user_id:
         return _default_data()

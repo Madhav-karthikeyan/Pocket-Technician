@@ -33,7 +33,6 @@ class _TechnicianModulesScreenState extends ConsumerState<TechnicianModulesScree
   final _consumedMinutes = TextEditingController(text: '60');
   final _feedPrice = TextEditingController(text: '45');
   final _shrimpPrice = TextEditingController(text: '260');
-  final _overheads = TextEditingController(text: '0');
   String? _selectedPondId;
   String _lastMessage = '';
 
@@ -60,7 +59,6 @@ class _TechnicianModulesScreenState extends ConsumerState<TechnicianModulesScree
       _consumedMinutes,
       _feedPrice,
       _shrimpPrice,
-      _overheads,
     ]) {
       controller.dispose();
     }
@@ -71,7 +69,7 @@ class _TechnicianModulesScreenState extends ConsumerState<TechnicianModulesScree
   Widget build(BuildContext context) {
     final ponds = ref.watch(allPondSnapshotsProvider);
     return DefaultTabController(
-      length: 9,
+      length: 8,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Technician Modules'),
@@ -81,7 +79,6 @@ class _TechnicianModulesScreenState extends ConsumerState<TechnicianModulesScree
               Tab(text: 'Setup'),
               Tab(text: 'Feed'),
               Tab(text: 'Sampling'),
-              Tab(text: 'Feeding Chart'),
               Tab(text: 'Water'),
               Tab(text: 'Feed Tray'),
               Tab(text: 'Profit'),
@@ -107,7 +104,6 @@ class _TechnicianModulesScreenState extends ConsumerState<TechnicianModulesScree
                       _setupTab(),
                       _feedTab(items),
                       _samplingTab(items),
-                      _feedingChartTab(selected),
                       _waterTab(items),
                       _feedTrayTab(selected),
                       _profitTab(selected),
@@ -173,33 +169,6 @@ class _TechnicianModulesScreenState extends ConsumerState<TechnicianModulesScree
     );
   }
 
-  Widget _feedingChartTab(PondSnapshot? selected) {
-    final feedPrice = double.tryParse(_feedPrice.text) ?? 45;
-    final shrimpPrice = double.tryParse(_shrimpPrice.text) ?? 260;
-    final overheads = double.tryParse(_overheads.text) ?? 0;
-    final plan = selected?.feedingChartPlan(feedPricePerKg: feedPrice, shrimpPricePerKg: shrimpPrice, overheadToday: overheads);
-    return _ModuleList(
-      children: [
-        _sectionTitle('Feeding chart + Po-te supervisor'),
-        if (selected == null)
-          _infoTile('Select pond', 'Create or select a pond to calculate the connected feeding chart.')
-        else ...[
-          _infoTile('Starter logic', 'For every 10,000 shrimp, start with 1 kg feed. Increase by 250 g/day until first sampling.'),
-          _infoTile('Feed size', plan!.feedSizeLabel),
-          _infoTile('DOC ${plan.doc} chart feed', '${plan.preSamplingFeedKg.toStringAsFixed(2)} kg/day before sampling adjustment'),
-          _infoTile('Survival-adjusted feed', '${plan.survivalAdjustedFeedKg.toStringAsFixed(2)} kg/day based on estimated numbers after survival'),
-          _infoTile('Weather/water adjusted feed', '${plan.recommendedFeedKg.toStringAsFixed(2)} kg/day. ${plan.weatherSuggestion}'),
-          _infoTile('Sampling decision', plan.samplingSuggestion),
-          _infoTile('Carrying capacity', plan.carryingCapacitySuggestion),
-          Row(children: [Expanded(child: _field(_feedPrice, 'Feed price / kg', number: true)), const SizedBox(width: 12), Expanded(child: _field(_shrimpPrice, 'Shrimp price / kg', number: true))]),
-          _field(_overheads, 'Today overheads', number: true),
-          _infoTile('Today profit estimate', '₹${plan.profitToday.toStringAsFixed(0)} after feed consumed and overheads'),
-          _infoTile('Po-te local AI (dummy)', plan.poTeSuggestion),
-        ],
-      ],
-    );
-  }
-
   Widget _waterTab(List<PondSnapshot> ponds) {
     return _ModuleList(
       children: [
@@ -235,18 +204,16 @@ class _TechnicianModulesScreenState extends ConsumerState<TechnicianModulesScree
     final shrimpPrice = double.tryParse(_shrimpPrice.text) ?? 0;
     final biomass = selected?.biomassKg ?? 0;
     final feed = selected?.feedKg ?? 0;
-    final overheads = double.tryParse(_overheads.text) ?? 0;
     final revenue = biomass * shrimpPrice;
     final feedCost = feed * feedPrice;
     return _ModuleList(
       children: [
         _sectionTitle('Profit & carrying capacity'),
-        _field(_overheads, 'Overheads to subtract', number: true),
         _field(_feedPrice, 'Feed price / kg', number: true),
         _field(_shrimpPrice, 'Shrimp price / kg', number: true),
         _infoTile('Revenue', '₹${revenue.toStringAsFixed(0)}'),
         _infoTile('Feed cost', '₹${feedCost.toStringAsFixed(0)}'),
-        _infoTile('Projected profit', '₹${(revenue - feedCost - overheads).toStringAsFixed(0)}'),
+        _infoTile('Projected profit', '₹${(revenue - feedCost).toStringAsFixed(0)}'),
         _infoTile('Biomass density', '${biomass.toStringAsFixed(1)} kg across selected pond area'),
       ],
     );
@@ -273,8 +240,7 @@ class _TechnicianModulesScreenState extends ConsumerState<TechnicianModulesScree
         _infoTile('Farm comparison', '${ponds.length} ponds available for multi-pond comparison.'),
         _infoTile('Feed Tray AI', 'Reference-chart feed projection is represented by feed tray and virtual farm modules.'),
         _infoTile('Shrimp larvae detection', 'Camera/AI integration can be connected as a native mobile camera flow while keeping the farm records local.'),
-        _infoTile('Weather & lunar logic', 'Connected to feeding chart reductions: phone geolocation/weather alerts can reduce feed when rain, cloud cover, or low-oxygen risk is detected while local farm data stays offline.'),
-        _infoTile('Po-te supervisor', 'Dummy local AI placeholder that will later learn from sampling, feed tray, water, weather, carrying capacity, and profit signals.'),
+        _infoTile('Weather & lunar logic', 'Ready as a mobile module hook; it can use phone location and weather APIs while preserving offline farm data.'),
       ],
     );
   }

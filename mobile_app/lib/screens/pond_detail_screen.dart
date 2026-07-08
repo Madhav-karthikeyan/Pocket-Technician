@@ -102,8 +102,6 @@ class _PondDetail extends StatelessWidget {
           },
         ),
         const SizedBox(height: 12),
-        _FeedingChartCard(snapshot: snapshot),
-        const SizedBox(height: 12),
         _DataCard(
           title: 'Water quality',
           rows: {
@@ -192,38 +190,6 @@ class _GrowthChart extends StatelessWidget {
       ),
     );
   }
-}
-
-
-class _FeedingChartCard extends StatelessWidget {
-  const _FeedingChartCard({required this.snapshot});
-
-  final PondSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final plan = snapshot.feedingChartPlan();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Feeding chart', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          _chartRow('Starter rule', '${plan.stockUnits.toStringAsFixed(1)} kg base for ${snapshot.pond.initialStock} stocked'),
-          _chartRow('DOC ${plan.doc} chart', '${plan.preSamplingFeedKg.toStringAsFixed(2)} kg/day'),
-          _chartRow('After survival/weather', '${plan.recommendedFeedKg.toStringAsFixed(2)} kg/day'),
-          _chartRow('Feed size', plan.feedSizeLabel),
-          const SizedBox(height: 8),
-          Text(plan.poTeSuggestion),
-        ]),
-      ),
-    );
-  }
-
-  Widget _chartRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(children: [Expanded(child: Text(label)), Text(value, style: const TextStyle(fontWeight: FontWeight.w800))]),
-      );
 }
 
 class _DataCard extends StatelessWidget {

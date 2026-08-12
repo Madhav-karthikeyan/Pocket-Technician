@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../models/app_models.dart';
+import '../core/expert/expert_engine.dart';
 import '../services/providers.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -42,6 +43,8 @@ class DashboardScreen extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
             ),
             const SizedBox(height: 20),
+            _ExpertInsights(),
+            const SizedBox(height: 20),
             Row(children: [Expanded(child: Text('Farmer database', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800))), FilledButton.icon(onPressed: () => context.push('/modules'), icon: const Icon(Icons.add_rounded), label: const Text('Add'))]),
             const SizedBox(height: 12),
             farmers.when(
@@ -54,6 +57,51 @@ class DashboardScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+
+
+class _ExpertInsights extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final assessments = ref.watch(farmExpertAssessmentsProvider);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.psychology_alt_rounded, color: Color(0xFF0B4F6C)),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Expert Insights', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+          ]),
+          const SizedBox(height: 10),
+          assessments.when(
+            data: (items) {
+              if (items.isEmpty) return const Text('Add ponds, sampling, feed, and water-quality records to generate expert assessments from local data.');
+              return Column(
+                children: items.take(3).map((assessment) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.circle, size: 14, color: _severityColor(assessment.overallSeverity)),
+                  title: Text(assessment.summary, style: const TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: Text('Confidence: ${assessment.confidence.name} • Findings: ${assessment.findings.length}'),
+                )).toList(),
+              );
+            },
+            error: (error, _) => Text('Expert engine unavailable: $error'),
+            loading: () => const LinearProgressIndicator(),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Color _severityColor(ExpertSeverity severity) => switch (severity) {
+        ExpertSeverity.critical => Colors.red.shade800,
+        ExpertSeverity.high => Colors.deepOrange,
+        ExpertSeverity.medium => Colors.orange,
+        ExpertSeverity.low => Colors.green,
+        ExpertSeverity.info => Colors.blueGrey,
+      };
 }
 
 class _MetricsGrid extends StatelessWidget {

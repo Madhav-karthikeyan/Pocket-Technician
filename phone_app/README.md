@@ -59,3 +59,7 @@ The current container used for this migration does not include the Flutter SDK, 
 The sampling calculation is implemented in `lib/core/services/aquaculture_calculator.dart` (`AquacultureCalculator.sampling`) and is persisted from `lib/services/local_database.dart` (`LocalDatabase.addSamplingLog`). The Sampling tab in `lib/screens/technician_modules_screen.dart` only collects inputs; it does not own the formula.
 
 For a clear list of mobile-vs-Streamlit differences, see `docs/FLUTTER_DIFFERENCES.md`.
+
+## Aquaculture Expert Intelligence
+
+The condition-rule-based Expert AI is integrated into the existing Pocket Technician Flutter app, not built as a separate application. It uses local farm, pond, feed, sampling, water-quality, weather-ready, and domain-calculated metrics to create explainable assessments. See `docs/EXPERT_AI.md` for the rule engine, context, persistence, UI integration, and safety model.

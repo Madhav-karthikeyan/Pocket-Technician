@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../models/app_models.dart';
+import '../core/expert/expert_engine.dart';
 import '../services/providers.dart';
 
 class PondDetailScreen extends ConsumerWidget {
@@ -32,7 +33,7 @@ class PondDetailScreen extends ConsumerWidget {
         ],
       ),
       body: detail.when(
-        data: (data) => _PondDetail(bundle: data),
+        data: (data) => _PondDetail(bundle: data, pondId: pondId),
         error: (error, _) => Center(child: Text('Unable to load pond: $error')),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
@@ -41,9 +42,10 @@ class PondDetailScreen extends ConsumerWidget {
 }
 
 class _PondDetail extends StatelessWidget {
-  const _PondDetail({required this.bundle});
+  const _PondDetail({required this.bundle, required this.pondId});
 
   final PondDetailBundle bundle;
+  final String pondId;
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +115,8 @@ class _PondDetail extends StatelessWidget {
           },
         ),
         const SizedBox(height: 12),
+        _ExpertAssessmentCard(pondId: pondId),
+        const SizedBox(height: 12),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -148,6 +152,68 @@ class _PondDetail extends StatelessWidget {
       ],
     );
   }
+}
+
+
+
+class _ExpertAssessmentCard extends ConsumerWidget {
+  const _ExpertAssessmentCard({required this.pondId});
+  final String pondId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final assessment = ref.watch(pondExpertAssessmentProvider(pondId));
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.psychology_alt_rounded, color: Color(0xFF0B4F6C)),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Expert Pond Assessment', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900))),
+          ]),
+          const SizedBox(height: 10),
+          assessment.when(
+            data: (value) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(value.summary, style: const TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text('Confidence: ${value.confidence.name} • Final suggested feed: ${value.finalSuggestedFeedKg?.toStringAsFixed(2) ?? 'insufficient data'} kg'),
+              const SizedBox(height: 8),
+              if (!value.hasFindings) const Text('No rule fired from available local records.'),
+              for (final finding in value.findings.take(3))
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: Text(finding.title),
+                  subtitle: Text('Rule ${finding.rule.id} v${finding.rule.version} • ${finding.rule.severity.name}'),
+                  children: [
+                    _BulletSection(title: 'Evidence', values: finding.evidence),
+                    _BulletSection(title: 'Reasoning', values: finding.reasoningChain),
+                    _BulletSection(title: 'Recommended actions', values: finding.actions),
+                  ],
+                ),
+            ]),
+            error: (error, _) => Text('Expert assessment unavailable: $error'),
+            loading: () => const LinearProgressIndicator(),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _BulletSection extends StatelessWidget {
+  const _BulletSection({required this.title, required this.values});
+  final String title;
+  final List<String> values;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          for (final value in values) Text('• $value'),
+        ]),
+      );
 }
 
 class _Pill extends StatelessWidget {

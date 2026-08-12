@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 
 import '../models/app_models.dart';
 import '../core/services/aquaculture_calculator.dart';
+import '../core/expert/expert_engine.dart';
 
 class LocalDatabase {
   LocalDatabase._();
@@ -21,6 +22,7 @@ class LocalDatabase {
       version: 3,
       onCreate: _createSchema,
       onUpgrade: (db, oldVersion, newVersion) async {
+        await db.execute('DROP TABLE IF EXISTS expert_assessments');
         await db.execute('DROP TABLE IF EXISTS reports');
         await db.execute('DROP TABLE IF EXISTS water_logs');
         await db.execute('DROP TABLE IF EXISTS feed_logs');
@@ -131,6 +133,22 @@ class LocalDatabase {
         title TEXT NOT NULL,
         body TEXT NOT NULL,
         created_at TEXT NOT NULL,
+        FOREIGN KEY(pond_id) REFERENCES ponds(id) ON DELETE CASCADE
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE expert_assessments(
+        id TEXT PRIMARY KEY,
+        pond_id TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        confidence TEXT NOT NULL,
+        fired_rules TEXT NOT NULL,
+        recommended_action TEXT NOT NULL,
+        final_feed_kg REAL,
+        user_decision TEXT,
+        outcome_note TEXT,
         FOREIGN KEY(pond_id) REFERENCES ponds(id) ON DELETE CASCADE
       )
     ''');
@@ -285,6 +303,7 @@ class LocalDatabase {
   Future<void> addFeedLog({required String pondId, required double feedKg, required DateTime fedAt}) async {
     final db = await database;
     await db.insert('feed_logs', {'id': _uuid.v4(), 'pond_id': pondId, 'fed_at': fedAt.toIso8601String(), 'feed_kg': feedKg});
+    await createExpertAssessment(pondId);
   }
 
   Future<void> addSamplingLog({required String pondId, required int countPerKg, required double dailyFeedKg, required DateTime sampledAt}) async {
@@ -331,6 +350,7 @@ class LocalDatabase {
       biomassGain: metrics.weeklyBiomass ?? 0,
       fcr: metrics.weeklyFcr ?? 0,
     ));
+    await createExpertAssessment(pondId);
   }
 
   Future<double> _sumFeedBetween(String pondId, DateTime start, DateTime end) async {
@@ -342,6 +362,71 @@ class LocalDatabase {
       if (!date.isBefore(start) && !date.isAfter(end)) total += (row['feed_kg'] as num).toDouble();
     }
     return total;
+  }
+
+
+
+  Future<ExpertAssessment> createExpertAssessment(String pondId) async {
+    final db = await database;
+    final bundle = await pondDetail(pondId);
+    final assessment = _buildExpertAssessment(bundle);
+    await db.insert('expert_assessments', {
+      'id': _uuid.v4(),
+      'pond_id': pondId,
+      'created_at': DateTime.now().toIso8601String(),
+      'summary': assessment.summary,
+      'severity': assessment.overallSeverity.name,
+      'confidence': assessment.confidence.name,
+      'fired_rules': assessment.findings.map((finding) => '${finding.rule.id}@${finding.rule.version}').join(','),
+      'recommended_action': assessment.findings.expand((finding) => finding.actions).join('\n'),
+      'final_feed_kg': assessment.finalSuggestedFeedKg,
+    });
+    return assessment;
+  }
+
+  ExpertAssessment _buildExpertAssessment(PondDetailBundle bundle) {
+    final snapshot = bundle.snapshot;
+    final pond = snapshot.pond;
+    final latest = snapshot.latestSampling;
+    final water = snapshot.latestWater;
+    final previousSampling = bundle.sampling.length >= 2 ? bundle.sampling[bundle.sampling.length - 2] : null;
+    final feedToday = bundle.feed.isEmpty ? null : bundle.feed.last.feedKg;
+    final feed7DayAverage = bundle.feed.isEmpty ? null : bundle.feed.map((log) => log.feedKg).reduce((a, b) => a + b) / bundle.feed.length;
+    final calculator = AquacultureCalculator();
+    final doc = calculator.doc(pond.stockingDate, DateTime.now());
+    final plan = calculator.feedingPlan(
+      doc: doc,
+      initialStock: pond.initialStock.toDouble(),
+      survivalPct: latest?.survivalPct ?? 100,
+      biomassKg: latest?.biomassKg ?? 0,
+      areaM2: pond.areaSqm,
+      depthM: pond.depthM,
+      accumulatedFeedKg: bundle.feed.fold<double>(0, (sum, log) => sum + log.feedKg),
+    );
+    return const AquacultureExpertEngine().assess(ExpertContext(
+      farmName: snapshot.farm.name,
+      pondName: pond.name,
+      doc: doc,
+      pondAreaM2: pond.areaSqm,
+      depthM: pond.depthM,
+      initialStock: pond.initialStock,
+      abwG: latest?.abwG,
+      biomassKg: latest?.biomassKg,
+      survivalPct: latest?.survivalPct,
+      adgG: latest?.adgG,
+      weeklyFcr: latest?.weeklyFcr,
+      feedTodayKg: feedToday,
+      feed7DayAverageKg: feed7DayAverage,
+      baseFeedingPlan: plan,
+      temperatureC: water?.temperature,
+      dissolvedOxygenMgL: water?.dissolvedOxygen,
+      ph: water?.ph,
+      ammoniaMgL: water?.ammonia,
+      previousSurvivalPct: previousSampling?.survivalPct,
+      previousAbwG: previousSampling?.abwG,
+      recentFeedKg: bundle.feed.map((log) => log.feedKg).toList(),
+      recentFcr: bundle.sampling.map((log) => log.weeklyFcr).where((value) => value > 0).toList(),
+    ));
   }
 
   Future<void> addWaterLog({required String pondId, required DateTime checkedAt, required double temperature, required double dissolvedOxygen, required double ph, required double ammonia, required double nitrite}) async {
@@ -356,6 +441,7 @@ class LocalDatabase {
       'ammonia': ammonia,
       'nitrite': nitrite,
     });
+    await createExpertAssessment(pondId);
   }
 
   Future<void> updatePondLayout({required String pondId, required double x, required double y, required double width, required double height}) async {
